@@ -7,12 +7,12 @@ const mapa_5x5 = '{"name":"Futsal x5 GLH ; By Bazinga! from HaxMaps","width":108
 
 // Start Room
 const room = HBInit({
-    roomName: "MATRIX FUTSAL NB",
+    roomName: "FUTSAL NB",
     maxPlayers: 16,
     noPlayer: true,
     playerName: "Matrix Bot",
-    public: true,
-    token: "thr1.AAAAAF5QAoENAyiUH7fvcg.rY8q54u9RjY"
+    public: false,
+    token: "thr1.AAAAAF5QYNgWRkC0umHuhw.pjZLWbrlhB0"
 });
 // Configurações da sala
 //room.setDefaultStadium("Big");
@@ -20,15 +20,53 @@ room.setCustomStadium(mapa_3x3);
 room.setScoreLimit(3);
 room.setTimeLimit(3);
 room.setTeamsLock(true);
-room.setPassword("m");
+//room.setPassword("m");
+
+//Team Colors
+room.setTeamColors(1, 0, 0xFFC21C, [0xFFFEEB]);
+room.setTeamColors(2, 60, 0xFFD700, [0x000000]);
+
+///colors blue 90 000000 FFF70A F2EB09 E8E10A
 
 // Classes da sala
+/**
+ * 
+ * @param {*} hasToBeAdmin 
+ * @param {*} execution 
+ */
+const ICommandPermission = class ICommandPermission
+{
+    constructor(hasToBeAdmin, execution)
+    {
+        this.hasToBeAdmin = hasToBeAdmin;
+        this.execution = execution;
+    }
+
+    Execute(player /**/) // : bool
+    {
+        if (this.hasToBeAdmin && !player.admin)
+            return false;
+
+        console.log(arguments);
+
+        return this.execution(...arguments);
+    }
+}
+
 const CommandController = class CommandController
 {
     constructor() 
     {
+        this.CommandsPermissions = {
+            "!CAPF"     :   new ICommandPermission(false, this.toogleAdminCommand),
+            "!Gols"     :   new ICommandPermission(false, this.showGolsList),
+            "!Map"      :   new ICommandPermission(true, this.setMap),
+            "!setPass"  :   new ICommandPermission(true, this.setPassword),
+            "!cleanPass":   new ICommandPermission(true, this.cleanPassword)
+        };
     }
 
+    // Retorna se é ou não um comando (true or false)
     trataComando(player, message) {
         
         if (!message.startsWith("!"))
@@ -38,29 +76,26 @@ const CommandController = class CommandController
         
         var command = message.split(" ");
 
-        switch (command[0]) {
-            case "!CAPF":
-                this.toogleAdminCommand(player)
+        try 
+        {
+            var commandPermission = this.CommandsPermissions[command.shift()];
+            // Comando pode não ter sido encontrado, porém ele ainda é considerado uma tentativa.
+            // Logo não será mostrado no chat
+            if (commandPermission === null || typeof(commandPermission) === "undefined")
                 return true;
-            case "!Gols":
-                this.showGolsList();
-                return true;
-            case "!Map":
-                this.setMap(command[1]);
-                return true;
-            case "!setPass":
-                this.setPassword(command[1]);
-                return true;
-            case "!cleanPass":
-                this.cleanPassword();
-                return true;
+            
+            commandPermission.Execute(player, ...command);
+            return true;
 
-            default:
-                return true;
-        }
+        } catch (error) 
+        {
+            // Mesmo que haja erro não é pra mostrar que houve tentativa de comando
+            console.error(error);
+            return true;
+        }         
     }
 
-    toogleAdminCommand(player) {
+    toogleAdminCommand(player, _) {
         room.setPlayerAdmin(player.id, !player.admin);
     }
 
@@ -81,7 +116,7 @@ const CommandController = class CommandController
         room.sendAnnouncement(texto, null, 0xFFFF00, null, 1);
     }
 
-    setPassword(message)
+    setPassword(_, message)
     {
         room.setPassword(null);
     }
@@ -91,7 +126,7 @@ const CommandController = class CommandController
         room.setPassword(null);
     }
 
-    setMap(map)
+    setMap(_, map)
     {
         switch (map) {
             case "1x":
@@ -123,12 +158,84 @@ const CommandController = class CommandController
             default:
                 break;
         }
-
     }
 };
 
+const ChatController = class ChatController
+{
+    constructor(commandController)
+    {
+        this.commandController = commandController;
+
+        this.chatInterval = 3000; //ms
+
+        this.players = room.getPlayerList().map((player) => {
+            return {"player": player, "lastChatTime": null};
+        });
+    }
+
+    trataSpamming(player)
+    {
+        var chatPlayer = this.players.find((chatPlayer) => chatPlayer.player.id === player.id);
+
+        if (chatPlayer === null || chatPlayer === undefined)
+            return false;
+
+        if (chatPlayer.lastChatTime === null)
+        {
+            chatPlayer.lastChatTime = new Date();
+            return true;
+        }
+
+        var atual = new Date();
+        console.log("===============================================");
+        console.log(atual.getTime());
+        console.log(chatPlayer.lastChatTime.getTime());
+        console.log(atual.getTime() - chatPlayer.lastChatTime.getTime());
+
+        var isSpam = atual.getTime() - chatPlayer.lastChatTime.getTime() <= this.chatInterval;
+        chatPlayer.lastChatTime = atual;
+
+        return isSpam;
+    }
+
+    adicionaPlayer(player)
+    {
+        this.players.push({"player": player, "lastChatTime": null});
+    }
+
+    removePlayer(player)
+    {
+        this.players = this.players.filter((chatPlayer) => 
+        {
+            return (chatPlayer.player.id !== player.id);
+        });
+    }
+
+    trataChat(player, message)
+    {   
+        // Tratamento para evitar vazamento do comando no chat
+        if (message !== "!CAPF" && message.toLowerCase().includes("CAPF".toLowerCase()))
+            return false;
+
+        // Ativar somente quando a perfomece estiver boa o suficiente
+        // Se true é spam
+        // if (this.trataSpamming(player))
+        //     return false;
+
+        // Se for um comando retorna false para que não seja mostrado no chat
+        if (this.commandController.trataComando(player, message))
+            return false;
+
+        // Abre novas possibilidades de tratamento aqui
+        return true;
+    }
+}
+
+
 // Constantes da sala
 const commandController = new CommandController();
+const chatController = new ChatController(commandController);
 
 // Variáveis da sala
 var listDeGols = [];
@@ -138,12 +245,19 @@ var secondLastPlayerKicked = null;
 // Eventos da sala
 room.onPlayerJoin = function (player) {
     //updateAdmins();
+    chatController.adicionaPlayer(player);
+}
+
+room.onPlayerLeave = function (player) {
+
+    chatController.removePlayer(player);
 }
 
 room.onPlayerBallKick = function (player) {
     verificaAlmoco();
+
+    secondLastPlayerKicked = lastPlayerKicked;
     lastPlayerKicked = player;
-    secondLastPlayerKicked = player;
 }
 
 room.onTeamGoal = function (teamID) {
@@ -160,34 +274,28 @@ room.onPlayerChat = (player, message) => {
     // Outros códigos podem ser feitos aqui ainda
 
     // Caso retorne false no TrataComando trata-se de n ser um comando personalizado
-    return !commandController.trataComando(player, message);
+    return chatController.trataChat(player, message);
 }
 
 
 // Métodos
-// If there are no admins left in the room give admin to one of the remaining players.
-var updateAdmins = () => 
-{
-    // Get all players
-    var players = room.getPlayerList();
-    if (players.length == 0) return; // No players left, do nothing.
-    if (players.find((player) => player.admin) != null) return; // There's an admin left so do nothing.
-    room.setPlayerAdmin(players[0].id, true); // Give admin to the first non admin player in the list
-}
 
 var mensagemGol = () => 
 {
     room.sendAnnouncement("TOCA A MÚSICAAAAA", null, 0xFF0000, null, 1);
 }
 
-var incrementaGol = (teamID, player) =>
+var incrementaGol = (teamIDThatScored, player) =>
 {
-    // if (teamID === player.team) {
-    //     if (teamID !== secondLastPlayerKicked.team)
-    //         player = secondLastPlayerKicked;
-    //     else
-    //         return;
-    // }
+    // Caso o gol seja contra
+    if (teamIDThatScored !== player.team) {
+        // Verifica se o penultimo chute foi do time adversário
+        if (secondLastPlayerKicked != null && teamIDThatScored === secondLastPlayerKicked.team)
+            player = secondLastPlayerKicked;
+        // Caso tbm seja do mesmo time não adicionar
+        else
+            return;
+    }
 
     // Lista vázia
     if (listDeGols.length == 0) { listDeGols.push({"id": player.id, "name": player.name, "Gols": 1}); return; }
@@ -214,4 +322,3 @@ var verificaAlmoco = () =>
         }
     }
 }
-
