@@ -9,7 +9,7 @@ const mapa_5x5 = '{"name":"Futsal x5 GLH ; By Bazinga! from HaxMaps","width":108
 const room = HBInit({
     roomName: "MATRIX FUTSAL NB",
     maxPlayers: 16,
-    noPlayer: false,
+    noPlayer: true,
     playerName: "Matrix Bot",
     public: true,
     token: "thr1.AAAAAF5QAoENAyiUH7fvcg.rY8q54u9RjY"
@@ -42,12 +42,17 @@ const CommandController = class CommandController
             case "!CAPF":
                 this.toogleAdminCommand(player)
                 return true;
-
             case "!Gols":
                 this.showGolsList();
                 return true;
             case "!Map":
-                this.SetMap(command[1]);
+                this.setMap(command[1]);
+                return true;
+            case "!setPass":
+                this.setPassword(command[1]);
+                return true;
+            case "!cleanPass":
+                this.cleanPassword();
                 return true;
 
             default:
@@ -61,7 +66,7 @@ const CommandController = class CommandController
 
     showGolsList() {
         var texto = "";
-        if (listDeGols == null || listDeGols.length == 0)
+        if (listDeGols.length == 0)
         {
              texto = "Nenhum gol foi feito ainda";
         }
@@ -74,6 +79,16 @@ const CommandController = class CommandController
         }
 
         room.sendAnnouncement(texto, null, 0xFFFF00, null, 1);
+    }
+
+    setPassword(message)
+    {
+        room.setPassword(null);
+    }
+
+    cleanPassword()
+    {
+        room.setPassword(null);
     }
 
     setMap(map)
@@ -167,12 +182,12 @@ var mensagemGol = () =>
 
 var incrementaGol = (teamID, player) =>
 {
-    if (teamID === player.team) {
-        if (teamID !== secondLastPlayerKicked.team)
-            player = secondLastPlayerKicked;
-        else
-            return;
-    }
+    // if (teamID === player.team) {
+    //     if (teamID !== secondLastPlayerKicked.team)
+    //         player = secondLastPlayerKicked;
+    //     else
+    //         return;
+    // }
 
     // Lista vázia
     if (listDeGols.length == 0) { listDeGols.push({"id": player.id, "name": player.name, "Gols": 1}); return; }
