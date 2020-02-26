@@ -9,7 +9,7 @@ const mapa_5x5 = '{"name":"Futsal x5","width":1080,"height":532,"spawnDistance":
 
 // Constantes para uso global
 const ROOM_NAME = "⚽ MATRIX FUTSAL NB ⚽";
-const BOT_NAME = "🤖 Matrix BOT";
+const BOT_NAME = "🤖";
 const MAX_PLAYERS = 16;
 const DEFAULT_MAP = mapa_1x1_2x2;
 const SCORE_LIMIT_DEFAULT = 3;
@@ -28,6 +28,7 @@ const BLUE_TEAM_COLORS_DEFAULT = [2, 0, 0x000000, [0xF57D14]];
 // Constantes cores utilizadas
 const PRIMARY_COLOR_DEFAULT = 0xF57D14;
 const SECONDARY_COLOR_DEFAULT = 0xFFFF00;
+const TERNARY_COLOR_DEFAULT = 0xe80909;
 
 // Emoji list = https://pt.piliapp.com/emoji/list/
 
@@ -40,11 +41,11 @@ const room = HBInit({
     playerName: BOT_NAME,
     public: false,
     // https://www.haxball.com/headlesstoken
-    token: "thr1.AAAAAF5VydHiXbFWOnjstA.JAFZGLYp31A"
+    token: "thr1.AAAAAF5WjJUON-T8pOP9GQ.oxET6cICpTQ"
 });
 
 // Configurações da sala
-room.setCustomStadium(mapa_3x3);
+room.setCustomStadium(DEFAULT_MAP);
 room.setScoreLimit(SCORE_LIMIT_DEFAULT);
 room.setTimeLimit(TIME_LIMIT_DEFAULT);
 room.setTeamsLock(TEAMS_LOCK_DEFAULT);
@@ -57,8 +58,6 @@ room.setTeamColors(...BLUE_TEAM_COLORS_DEFAULT);
 // Classes da sala
 const TeamStatsController = class TeamStatsController 
 {
-    
-
     constructor()
     {
         // Red
@@ -119,7 +118,6 @@ const TeamStatsController = class TeamStatsController
 
 }
 
-
 const StatsController = class StatsController
 {
     constructor()
@@ -156,6 +154,7 @@ const StatsController = class StatsController
         this.stats[player.id].score = 0;
         this.stats[player.id].assists = 0;
         this.stats[player.id].rate = 0;
+        this.stats[player.id].winStreak = 0;
     }
 
     updateLastKick(player)
@@ -187,6 +186,21 @@ const StatsController = class StatsController
         });
     }
 
+    notifyLongWinStreak(playerID)
+    {
+        if (this.stats[playerID].winStreak < 2)
+            return;
+        
+        var text;
+
+        if (this.stats[playerID].losses == 0)
+            text = "[" + this.stats[playerID].name + "] está INVICTO em uma sequência de " + this.stats[playerID].winStreak +" vitórias 🏆";
+        else
+            text = "[" + this.stats[playerID].name + "] está em uma sequência de " + this.stats[playerID].winStreak +" vitórias 🏆";
+
+        room.sendAnnouncement(text, null, TERNARY_COLOR_DEFAULT, "bold", 1);
+    }
+
     onTeamVictory(scores)
     {
         var players_playing = room.getPlayerList().filter((player) => player.team != 0 );
@@ -196,9 +210,16 @@ const StatsController = class StatsController
         players_playing.forEach((player) =>
         {
             if (player.team == teamWonId)
+            {
                 this.stats[player.id].wins += 1;
+                this.stats[player.id].winStreak += 1;
+                this.notifyLongWinStreak(player.id);
+            }
             else
+            {
                 this.stats[player.id].losses += 1;
+                this.stats[player.id].winStreak = 0;
+            }
 
             this.stats[player.id].rate = 100 * (this.stats[player.id].wins / (this.stats[player.id].wins + this.stats[player.id].losses));
 
@@ -215,26 +236,30 @@ const StatsController = class StatsController
         // Caso o gol seja contra
         if (teamID !== striker.team) {
             
-            if (this.secondLastPlayerKicked != null)
+            if (assistant != null)
             {
-                if (teamID !== this.secondLastPlayerKicked.team)
+                // Caso a assistência seja contra, logo ninguem recebe a pontuação
+                if (teamID !== assistant.team)
                     return;
                 
-                striker = this.secondLastPlayerKicked;
+                // Caso a assistência venha do time que realizou o gol, o striker será ele
+                striker = assistant;
                 assistant = null;    
             }
         }
         else
         {
-            if (this.secondLastPlayerKicked != null && teamID !== this.secondLastPlayerKicked.team)
-            {
+            // Caso o gol seja valido e a assistência tenha vindo do outro time,
+            // não há assistência então.
+            if (assistant != null && teamID !== assistant.team)
                 assistant = null;
-            }  
         }
 
-        if (this.stats.hasOwnProperty(striker.id))
+        // Caso o striker exista na lista de stats, adiciona o score
+        if (this.stats.hasOwnProperty(striker.id)) 
             this.stats[striker.id].score += 1;
 
+        // Caso o assistente seja diferente do striker adiciona a assistência
         if (assistant != null && assistant.id != striker.id && this.stats.hasOwnProperty(assistant.id))
             this.stats[assistant.id].assists += 1;
 
@@ -278,7 +303,7 @@ const CommandController = class CommandController
 
         this.CommandsPermissions = {
             "!AdminInfo"                :   CommandPermission.Create(true,  this.printAdminInfo, this.statsController),
-            "!ListaStatus"              :   CommandPermission.Create(true, this.printStatList, this.statsController),
+            "!ListaStatus"              :   CommandPermission.Create(true,  this.printStatList, this.statsController),
             "!Status"                   :   CommandPermission.Create(false, this.printStat, this.statsController),
             "!Mapa"                     :   CommandPermission.Create(true,  this.setMap),
             "!SetPass"                  :   CommandPermission.Create(true,  this.setPassword),
