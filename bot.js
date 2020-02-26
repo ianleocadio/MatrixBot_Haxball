@@ -491,7 +491,7 @@ const chatController = new ChatController(commandController);
 room.onPlayerJoin = function (player) 
 {
     
-    room.sendAnnouncement("["+BOT_NAME+"] 👋 Bem vindo " + player.name + "!", null, PRIMARY_COLOR_DEFAULT, "bold", 1);
+    room.sendAnnouncement("["+BOT_NAME+"] 👋 Bem vindo(a), " + player.name + "!", null, PRIMARY_COLOR_DEFAULT, "bold", 1);
 
     //chatController.adicionaPlayer(player);
 
@@ -533,7 +533,6 @@ room.onTeamGoal = function(teamID) {
 
 room.onPlayerChat = function(player, message)
 {
-    
     // Outros códigos podem ser feitos aqui ainda
 
     // Caso retorne false no TrataComando trata-se de n ser um comando personalizado
