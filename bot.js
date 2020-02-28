@@ -48,7 +48,7 @@ const room = HBInit({
     maxPlayers: MAX_PLAYERS,
     noPlayer: true,
     playerName: BOT_NAME,
-    public: true,
+    public: false,
     // https://www.haxball.com/headlesstoken
     token: "thr1.AAAAAF5YS8A9bvctSR5MQA.ccIw2KTaiBI"
 });
@@ -135,52 +135,34 @@ const TeamStatsController = class TeamStatsController
         this.matchStats = new MatchStats();
     }
 
-    tryNewTeam(players_playing_auths)
+    tryGetOrAddTeam(players_playing_auths)
     {
         if (!players_playing_auths || players_playing_auths.length <= 0)
-            return false;
+            return null;
 
-        let key = players_playing_auths.reduce((keyAcum, auth) => (keyAcum + auth), undefined);
-        console.log(key);
+        let key = players_playing_auths.reduce((keyAcum, auth) => (keyAcum + auth), "");
 
-        if (!key)
-            return false;
+        if (key == "")
+            return null;
         
         if (this.TeamsCollection.has(key))
-            return false;
+            return this.TeamsCollection.get(key);
         
-        this.TeamsCollection.set(key, new TeamStats(key));
-        return true;
+        return this.TeamsCollection.set(key, new TeamStats(key));
     }
 
-    onGameStart()
+    getKeyTeamCollection(teamID)
     {
-        this.restartMatchStats();
+        let auths = room.getPlayerList()
+        .filter(p => p.team == teamID)
+        .map(p => this.statsController.stats[p.id]["auth"]);
 
-        let red_players_playing_auths = room.getPlayerList()
-        .filter(p => p.team == 1)
-        .map((p) => 
-        {
-            let player = this.statsController.stats[p.id];
-            if (player)
-                return player.auth;
+        var teamStats = this.tryGetOrAddTeam(auths);
 
-        }).sort();
-
-        let blue_players_playing_auths = room.getPlayerList()
-        .filter(p => p.team == 2)
-        .map((p) => 
-        {
-            let player = this.statsController.stats[p.id];
-            if (player)
-                return player.auth;
-
-        }).sort();
-
-        this.tryNewTeam(red_players_playing_auths);
-        this.tryNewTeam(blue_players_playing_auths);
-
-        console.log(this.TeamsCollection);
+        if (!teamStats)
+            return null;
+        else
+            return teamStats;
     }
 
     getMatchTimeString()
@@ -222,6 +204,58 @@ const TeamStatsController = class TeamStatsController
         this.matchStats[2].posse = 100 - this.matchStats[1].posse;
     }
 
+    calculaVitoria(teamWonID)
+    {
+        let teamWonStats = this.getKeyTeamCollection(teamWonID);
+
+        if (teamWonStats)
+        {
+            teamWonStats.wins++;
+            teamWonStats.winStreakAtual++;
+
+            if (teamWonStats.winStreakAtual > teamWonStats.winStreak)
+                teamWonStats.winStreak = teamWonStats.winStreakAtual;
+        }
+
+        let teamLostStats = this.getKeyTeamCollection(teamWonID == 1 ? 2 : 1);
+        
+        if (teamLostStats)
+        {
+            teamLostStats.losses++;
+            teamLostStats.winStreakAtual = 0;
+        }
+    }
+
+    onGameStart()
+    {
+        this.restartMatchStats();
+
+        let red_players_playing_auths = room.getPlayerList()
+        .filter(p => p.team == 1)
+        .map((p) => 
+        {
+            let player = this.statsController.stats[p.id];
+            if (player)
+                return player.auth;
+
+        }).sort();
+
+        let blue_players_playing_auths = room.getPlayerList()
+        .filter(p => p.team == 2)
+        .map((p) => 
+        {
+            let player = this.statsController.stats[p.id];
+            if (player)
+                return player.auth;
+
+        }).sort();
+
+        this.tryGetOrAddTeam(red_players_playing_auths);
+        this.tryGetOrAddTeam(blue_players_playing_auths);
+
+        console.log(this.TeamsCollection);
+    }
+
     onTeamGoal(teamID, striker, assistant, golContra)
     {
         if (striker == null)
@@ -234,12 +268,22 @@ const TeamStatsController = class TeamStatsController
             "team": teamID,
             "golContra": golContra
         });
+
+        let teamStats = this.getKeyTeamCollection(striker.team);
+        
+        if (teamStats)
+            teamStats.score++;
+
+        console.log(teamStats);
+        console.log(this.TeamsCollection);
     }
 
     onTeamVictory(scores)
     {
-        room.sendAnnouncement(("🏆 Vitória do time " + ((scores.red > scores.blue) ? "🔴" : "🔵") + " ("+ scores.red + "x" + scores.blue +")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
+        var teamWonID = (scores.red > scores.blue) ? 1 : 2;
+        room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID == 1 ? "🔴" : "🔵") + " ("+ scores.red + "x" + scores.blue +")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
         this.calculaPosse();
+        this.calculaVitoria(teamWonID);
         this.printPosseDeBola();
         this.printStrikers();
     }
@@ -279,8 +323,6 @@ const StatsController = class StatsController
 
         this.stats[player.id] = new PlayerStats(player.auth, player.name);
     }
-
-    
 
     printPlayerStat(id, sendToAll = false)
     {
@@ -725,7 +767,11 @@ room.onTeamGoal = function(teamID) {
     mensagemGol(teamID);
     
     let striker = playersThatTouchedTheBall.pop();
+    console.log(striker);
     striker = (striker) ? room.getPlayer(striker) : null;
+    console.log(striker);
+    if (!striker)
+        return;
 
     let assistant = playersThatTouchedTheBall.pop();
     assistant = (assistant) ? room.getPlayer(assistant): null;
