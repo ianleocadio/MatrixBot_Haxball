@@ -48,7 +48,7 @@ const room = HBInit({
     maxPlayers: MAX_PLAYERS,
     noPlayer: true,
     playerName: BOT_NAME,
-    public: false,
+    public: true,
     // https://www.haxball.com/headlesstoken
     token: "thr1.AAAAAF5YS8A9bvctSR5MQA.ccIw2KTaiBI"
 });
@@ -99,12 +99,10 @@ const TeamStats = class TeamStats
     }
 }
 
-const PlayerStats = class PlayerStats
+const Stats = class Stats
 {
-    constructor(auth, name)
+    constructor()
     {
-        this.auth = auth;
-        this.name = name;
         this.wins = 0;
         this.losses = 0;
         this.score = 0;
@@ -115,72 +113,148 @@ const PlayerStats = class PlayerStats
     }
 }
 
+const Player = class Player
+{
+    constructor(auth, name)
+    {
+        this.auth = auth;
+        this.name = name;
+        this.stats = new Stats();
+    }
+}
 
-// Classes da sala
-const TeamStatsController = class TeamStatsController 
+const TeamsController = class TeamsController
 {
     constructor(statsController)
     {
-        // Injections
+        // Dependências
         this.statsController = statsController;
 
-        // Properties
-        this.matchStats = new MatchStats();
-
-        this.TeamsCollection = new Map();
+        // Propriedades
+        this.teams = new Map();
     }
 
-    restartMatchStats()
-    {
-        this.matchStats = new MatchStats();
-    }
+    // Métodos
 
-    tryGetOrAddTeam(players_playing_auths)
+    tryGetOrAddTeam(playersPlayingAuths)
     {
-        if (!players_playing_auths || players_playing_auths.length <= 0)
+        if (!playersPlayingAuths || typeof(playersPlayingAuths) !== "array" || playersPlayingAuths.length <= 0)
             return null;
 
-        let key = players_playing_auths.reduce((keyAcum, auth) => (keyAcum + auth), "");
+        let key = playersPlayingAuths.reduce((keyAcum, auth) => (keyAcum + auth), "");
 
-        if (key == "")
+        if (key === "")
             return null;
         
-        if (this.TeamsCollection.has(key))
-            return this.TeamsCollection.get(key);
+        if (this.teams.has(key))
+            return this.teams.get(key);
         
-        return this.TeamsCollection.set(key, new TeamStats(key));
+        return this.teams.set(key, new TeamStats(key));
     }
 
-    getKeyTeamCollection(teamID)
+    tryGetCurrentTeam(teamID)
     {
         let auths = room.getPlayerList()
         .filter(p => p.team == teamID)
-        .map(p => this.statsController.stats[p.id]["auth"]);
+        .map(p => this.statsController.getPlayer(p.id).auth);
 
-        var teamStats = this.tryGetOrAddTeam(auths);
+        var teamStats = this.teams.get(auths);
 
         if (!teamStats)
-            return null;
-        else
-            return teamStats;
+            return null;    
+
+        return teamStats;
     }
 
-    getMatchTimeString()
-    {
-        var time = room.getScores().time;
-        var mins = ~~((time % 3600) / 60);
-        var secs = ~~time % 60;
+    // Eventos
 
-        var ret = (mins < 10 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "");
-        ret += "" + secs;
-        return ret;
+    handleGameStart()
+    {
+        // Red team
+        let red_players_playing_auths = room.getPlayerList()
+        .filter(p => p.team == 1)
+        .map((p) => 
+        {
+            let player = this.statsController.getPlayer(p.id);
+            if (player)
+                return player.auth;
+
+        }).sort();
+
+        this.tryGetOrAddTeam(red_players_playing_auths);
+
+        // Blue team
+        let blue_players_playing_auths = room.getPlayerList()
+        .filter(p => p.team == 2)
+        .map((p) => 
+        {
+            let player = this.statsController.getPlayer(p.id);
+            if (player)
+                return player.auth;
+
+        }).sort();
+
+        this.tryGetOrAddTeam(blue_players_playing_auths);
+    }
+
+    handleTeamGoal(striker)
+    {
+        let teamStats = this.tryGetCurrentTeam(striker.team);
+        
+        if (teamStats)
+            teamStats.score++;
+    }
+
+    handleTeamVictory(scores)
+    {   
+        var teamWonID = scores.red > scores.blue ? 1 : 2;
+
+        let teamWonStats = this.tryGetCurrentTeam(teamWonID);
+
+        if (teamWonStats)
+        {
+            teamWonStats.wins++;
+            teamWonStats.winStreakAtual++;
+
+            if (teamWonStats.winStreakAtual > teamWonStats.winStreak)
+                teamWonStats.winStreak = teamWonStats.winStreakAtual;
+        }
+
+        let teamLostStats = this.tryGetCurrentTeam(teamWonID == 1 ? 2 : 1);
+        
+        if (teamLostStats)
+        {
+            teamLostStats.losses++;
+            teamLostStats.winStreakAtual = 0;
+        }
+    }
+    
+}
+
+const MatchController = class MatchController
+{
+    constructor(statsController)
+    {
+        // Dependências
+        this.statsController = statsController;
+
+        // Propriedades
+        this.currentMatchStats = new MatchStats();
+        this.playersThatTouchedTheBall = new Array();
+    }
+
+    // Métodos
+    restartMatchStats()
+    {
+        this.currentMatchStats = new MatchStats();
+        this.playersThatTouchedTheBall = new Array();
     }
 
     printStrikers()
     {
         room.sendAnnouncement("Artilheiros da partida:", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         var text = "";
-        this.matchStats.strikers.forEach((value, key) =>
+        this.currentMatchStats.strikers.forEach((value, key) =>
         {
             if (!value.golContra)
                 text += "(" + (value.team == 1 ? "🔴" : "🔵") + "["+ key +"] " + value.striker.name + (value.assistant != null ? " (Assist: "+ value.assistant.name +") ) " : " ) ");
@@ -192,147 +266,105 @@ const TeamStatsController = class TeamStatsController
         room.sendAnnouncement(text, null, SECONDARY_COLOR_DEFAULT, null, 0);
     }
 
-    printPosseDeBola()
+    printPossession()
     {
-        room.sendAnnouncement("Posse de bola 🔴 " + this.matchStats[1].posse + "% : " + this.matchStats[2].posse + "% 🔵", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
+        room.sendAnnouncement("Posse de bola 🔴 " + this.currentMatchStats[1].posse + "% : " + this.currentMatchStats[2].posse + "% 🔵", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
     }
 
-    calculaPosse()
+    calculatePossession()
     {
-        this.matchStats[1].posse = 100 * this.matchStats[1].qtdToques / (this.matchStats[1].qtdToques + this.matchStats[2].qtdToques);
-        this.matchStats[1].posse = Math.round(isNaN(this.matchStats[1].posse) ? 0 : this.matchStats[1].posse);
-        this.matchStats[2].posse = 100 - this.matchStats[1].posse;
+        this.currentMatchStats[1].posse = 100 * this.currentMatchStats[1].qtdToques / (this.currentMatchStats[1].qtdToques + this.currentMatchStats[2].qtdToques);
+        this.currentMatchStats[1].posse = Math.round(isNaN(this.currentMatchStats[1].posse) ? 0 : this.currentMatchStats[1].posse);
+        this.currentMatchStats[2].posse = 100 - this.currentMatchStats[1].posse;
     }
 
-    calculaVitoria(teamWonID)
+    handleGameTick()
     {
-        let teamWonStats = this.getKeyTeamCollection(teamWonID);
-
-        if (teamWonStats)
-        {
-            teamWonStats.wins++;
-            teamWonStats.winStreakAtual++;
-
-            if (teamWonStats.winStreakAtual > teamWonStats.winStreak)
-                teamWonStats.winStreak = teamWonStats.winStreakAtual;
-        }
-
-        let teamLostStats = this.getKeyTeamCollection(teamWonID == 1 ? 2 : 1);
-        
-        if (teamLostStats)
-        {
-            teamLostStats.losses++;
-            teamLostStats.winStreakAtual = 0;
-        }
+        var players_playing = room.getPlayerList().filter(p => p.team != 0);
+        var ballPosition = room.getBallPosition();
+        const ballRadius = 6.4;
+        const playerRadius = 15;
+        var triggerDistance = ballRadius + playerRadius + 0.01;
+    
+        players_playing.forEach((player) => {
+    
+            var distanceToBall = pointDistance(player.position, ballPosition);
+            if ( distanceToBall < triggerDistance ) {
+    
+                var p = this.playersThatTouchedTheBall.find((p) =>p === player.id);
+                var index = this.playersThatTouchedTheBall.indexOf(p);
+                if (index <= -1)
+                {
+                    this.playersThatTouchedTheBall.push(player.id);
+                }
+                else
+                {
+                    this.playersThatTouchedTheBall.splice(index, 1);
+                    this.playersThatTouchedTheBall.push(player.id);
+                }
+    
+                this.currentMatchStats[player.team].qtdToques++;
+            }
+        });
     }
 
-    onGameStart()
+
+    // Eventos
+    handleGameStart()
     {
         this.restartMatchStats();
-
-        let red_players_playing_auths = room.getPlayerList()
-        .filter(p => p.team == 1)
-        .map((p) => 
-        {
-            let player = this.statsController.stats[p.id];
-            if (player)
-                return player.auth;
-
-        }).sort();
-
-        let blue_players_playing_auths = room.getPlayerList()
-        .filter(p => p.team == 2)
-        .map((p) => 
-        {
-            let player = this.statsController.stats[p.id];
-            if (player)
-                return player.auth;
-
-        }).sort();
-
-        this.tryGetOrAddTeam(red_players_playing_auths);
-        this.tryGetOrAddTeam(blue_players_playing_auths);
-
-        console.log(this.TeamsCollection);
     }
 
-    onTeamGoal(teamID, striker, assistant, golContra)
+    handleTeamGoal(teamID, striker, assistant, golContra)
     {
         if (striker == null)
             return;
 
-        this.matchStats.strikers.set(this.getMatchTimeString(), 
+        this.currentMatchStats.strikers.set(getMatchTimeString(), 
         {
             "striker": striker,
             "assistant": (assistant != null && assistant.id != striker.id) ? assistant : null,
             "team": teamID,
             "golContra": golContra
         });
-
-        let teamStats = this.getKeyTeamCollection(striker.team);
-        
-        if (teamStats)
-            teamStats.score++;
-
-        console.log(teamStats);
-        console.log(this.TeamsCollection);
     }
 
-    onTeamVictory(scores)
+    handleTeamVictory(scores)
     {
         var teamWonID = (scores.red > scores.blue) ? 1 : 2;
+        this.calculatePossession();
         room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID == 1 ? "🔴" : "🔵") + " ("+ scores.red + "x" + scores.blue +")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
-        this.calculaPosse();
-        this.calculaVitoria(teamWonID);
-        this.printPosseDeBola();
+        this.printPossession();
         this.printStrikers();
     }
-
-    onPlayerBallKick(player)
-    {
-        this.matchStats[player.team].qtdToques++;
-    }
-
 }
 
 const StatsController = class StatsController
 {
-    constructor()
+    constructor(playerController)
     {
-        this.stats = {};
-        this.AuthToId = {};
+        this.playerController = playerController;
     }
 
-    newPlayer(player)
-    {   
-        if (this.AuthToId.hasOwnProperty(player.auth))
-        {
-            var oldID = this.AuthToId[player.auth];
-            // Renovando chave
-            this.stats[player.id] = this.stats[oldID];
-            this.stats[player.id].auth = player.auth;
-            this.stats[player.id].name = player.name;
-            // Atualizando referência
-            this.AuthToId[player.auth] = player.id;
-            // Removendo dados do id anterior;
-            delete this.stats[oldID];
-            return;
-        }
+    getPlayer(id)
+    {
+        return this.playerController.players[id];
+    }
 
-        this.AuthToId[player.auth] = player.id;
-
-        this.stats[player.id] = new PlayerStats(player.auth, player.name);
+    getPlayers()
+    {
+        return this.playerController.players;
     }
 
     printPlayerStat(id, sendToAll = false)
     {
-        var rate = parseInt(this.stats[id].rate);
-        var text = "[" + this.stats[id].name + "]"
-                    + " 🏆 Vitórias: " + this.stats[id].wins
-                    + ", 💩 Derrotas: " + this.stats[id].losses
+        var rate = parseInt(this.getPlayer(id).stats.rate);
+        var text = "[" + this.getPlayer(id).name + "]"
+                    + " 🏆 Vitórias: " + this.getPlayer(id).stats.wins
+                    + ", 💩 Derrotas: " + this.getPlayer(id).stats.losses
                     + ", 📊 Aproveitamento: " + (isNaN(rate) ? 0 : rate) + "%"
-                    + ", ⚽ Gols: " + this.stats[id].score 
-                    + ", 🏃‍♂️ Assistências: " + this.stats[id].assists;
+                    + ", ⚽ Gols: " + this.getPlayer(id).stats.score 
+                    + ", 🏃‍♂️ Assistências: " + this.getPlayer(id).stats.assists;
         
         if (sendToAll)
             room.sendAnnouncement(text, null, 0xFFFF00, null, 0);
@@ -344,7 +376,7 @@ const StatsController = class StatsController
     {
         room.sendAnnouncement(">>>>>>>>>>>>> Lista de Status Geral <<<<<<<<<<<<<", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
-        Object.keys(this.stats).map((playerID) => 
+        Object.keys(this.getPlayers()).map((playerID) => 
         {
             this.printPlayerStat(playerID, true);
         });
@@ -354,19 +386,19 @@ const StatsController = class StatsController
     {
         room.sendAnnouncement(">>>>>>>>>>>>> Hall of Fame (⚽ Gols) <<<<<<<<<<<<<", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
-        Object.values(this.stats)
+        Object.values(this.getPlayers())
         .sort((p1,p2) =>
         {
-            if (p1.score < p2.score)
+            if (p1.stats.score < p2.stats.score)
                 return 1;
-            else if (p1.score > p2.score)
+            else if (p1.stats.score > p2.stats.score)
                 return -1;
             else
                 return 0;
         })
-        .forEach((stats, i) => 
+        .forEach((player, i) => 
         {
-            room.sendAnnouncement( (i + 1) + "º) "+ stats.name +" - ⚽ Gols: " + stats.score, null, 0xFFFF00, null, 0);
+            room.sendAnnouncement( (i + 1) + "º) "+ player.name +" - ⚽ Gols: " + player.stats.score, null, 0xFFFF00, null, 0);
         });
     }
 
@@ -374,19 +406,19 @@ const StatsController = class StatsController
     {
         room.sendAnnouncement(">>>>>>>>>>>>> Hall of Fame (🏆 Vitórias) <<<<<<<<<<<<<", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
-        Object.values(this.stats)
+        Object.values(this.getPlayers())
         .sort((p1,p2) =>
         {
-            if (p1.wins < p2.wins)
+            if (p1.stats.wins < p2.stats.wins)
                 return 1;
-            else if (p1.wins > p2.wins)
+            else if (p1.stats.wins > p2.stats.wins)
                 return -1;
             else
                 return 0;
         })
-        .forEach((stats, i) => 
+        .forEach((player, i) => 
         {
-            room.sendAnnouncement( (i + 1) + "º) "+ stats.name +" - 🏆 Vitórias: " + stats.wins, null, 0xFFFF00, null, 0);
+            room.sendAnnouncement( (i + 1) + "º) "+ player.name +" - 🏆 Vitórias: " + player.stats.wins, null, 0xFFFF00, null, 0);
         });
     }
 
@@ -394,38 +426,40 @@ const StatsController = class StatsController
     {
         room.sendAnnouncement(">>>>>>>>>>>>> Hall of Fame (🏆 Vitórias em sequência) <<<<<<<<<<<<<", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
-        Object.values(this.stats)
+        Object.values(this.getPlayers())
         .sort((p1,p2) =>
         {
-            if (p1.winStreak < p2.winStreak)
+            if (p1.stats.winStreak < p2.stats.winStreak)
                 return 1;
-            else if (p1.winStreak > p2.winStreak)
+            else if (p1.stats.winStreak > p2.stats.winStreak)
                 return -1;
             else
                 return 0;
         })
-        .forEach((stats, i) => 
+        .forEach((player, i) => 
         {
-            room.sendAnnouncement( (i + 1) + "º) "+ stats.name +" - 🏆 Vitórias em sequência: " + stats.winStreak, null, 0xFFFF00, null, 0);
+            room.sendAnnouncement( (i + 1) + "º) "+ player.name +" - 🏆 Vitórias em sequência: " + player.stats.winStreak, null, 0xFFFF00, null, 0);
         });
     }
 
     notifyLongWinStreak(playerID)
     {
-        if (this.stats[playerID].winStreakAtual < 5)
+        if (this.getPlayer(playerID).stats.winstreakAtual < 5)
             return;
         
         var text;
 
-        if (this.stats[playerID].losses == 0)
-            text = "[" + this.stats[playerID].name + "] está INVICTO em uma sequência de " + this.stats[playerID].winStreakAtual +" vitórias 🏆";
+        if (this.getPlayer(playerID).stats.losses === 0)
+            text = "[" + this.getPlayer(playerID).name + "] está INVICTO em uma sequência de " 
+            + this.getPlayer(playerID).stats.winstreakAtual +" vitórias 🏆";
         else
-            text = "[" + this.stats[playerID].name + "] está em uma sequência de " + this.stats[playerID].winStreakAtual +" vitórias 🏆";
+            text = "[" + this.getPlayer(playerID).name + "] está em uma sequência de "
+            + this.getPlayer(playerID).stats.winstreakAtual +" vitórias 🏆";
 
         room.sendAnnouncement(text, null, TERNARY_COLOR_DEFAULT, "bold", 1);
     }
 
-    onTeamVictory(scores)
+    handleTeamVictory(scores)
     {
         var players_playing = room.getPlayerList().filter((player) => player.team != 0 );
         var teamWonId = (scores.red > scores.blue) ? 1 : 2;
@@ -435,21 +469,23 @@ const StatsController = class StatsController
 
         players_playing.forEach((player) =>
         {
+            var playerStats = this.getPlayer(player.id).stats;
             if (player.team == teamWonId)
             {
-                this.stats[player.id].wins += 1;
-                this.stats[player.id].winStreakAtual += 1;
+                playerStats.wins++;
+                playerStats.winstreakAtual++;
 
-                if (this.stats[player.id].winStreakAtual > this.stats[player.id].winStreak)
-                    this.stats[player.id].winStreak = this.stats[player.id].winStreakAtual;
+                if (playerStats.winstreakAtual > playerStats.winstreak)
+                    playerStats.winstreak = playerStats.winstreakAtual;
             }
             else
             {
-                this.stats[player.id].losses += 1;
-                this.stats[player.id].winStreakAtual = 0;
+                playerStats.losses++;
+                playerStats.winstreakAtual = 0;
             }
 
-            this.stats[player.id].rate = 100 * (this.stats[player.id].wins / (this.stats[player.id].wins + this.stats[player.id].losses));
+            playerStats.rate = 100 * (playerStats.wins 
+                / (playerStats.wins + playerStats.losses));
 
             if (SHOW_STATS_ON_VICTORY)
                 this.printPlayerStat(player.id, true);
@@ -458,72 +494,127 @@ const StatsController = class StatsController
         players_playing.forEach((player) => this.notifyLongWinStreak(player.id));
     }
 
-    
-    onTeamGoal(striker, assistant)
+    handleTeamGoal(striker, assistant)
     {
         // Caso o striker exista na lista de stats, adiciona o score
-        if (this.stats.hasOwnProperty(striker.id)) 
-            this.stats[striker.id].score += 1;
+        if (this.getPlayer(striker.id)) 
+            this.getPlayer(striker.id).stats.score += 1;
 
         // Caso o assistente seja diferente do striker adiciona a assistência
-        if (assistant != null && assistant.id != striker.id && this.stats.hasOwnProperty(assistant.id))
-            this.stats[assistant.id].assists += 1;
+        if (assistant != null && assistant.id != striker.id && this.getPlayer(assistant.id))
+            this.getPlayer(assistant.id).stats.assists += 1;
 
     }
 
 }
 
+const PlayerController = class PlayerController
+{
+    constructor()
+    {
+        // Propriedades
+        this.AuthToId = {};
+        this.players = {};
+    }
+
+    newPlayer(player)
+    {   
+        if (this.AuthToId.hasOwnProperty(player.auth))
+        {
+            var oldID = this.AuthToId[player.auth];
+            // Renovando chave
+            this.players[player.id] = this.players[oldID];
+            this.players[player.id].auth = player.auth;
+            this.players[player.id].name = player.name;
+            // Atualizando referência
+            this.AuthToId[player.auth] = player.id;
+            // Removendo dados do id anterior;
+            delete this.playerController.players[oldID];
+            return;
+        }
+
+        this.AuthToId[player.auth] = player.id;
+
+        this.players[player.id] = new Player(player.auth, player.name);
+    }
+}
+
+
+const Command = class Command
+{
+    // Não usar diretamente
+    constructor(hasToBeAdmin, method, services = [])
+    {
+        this.hasToBeAdmin = hasToBeAdmin;
+        this.method = method;
+        this.services = services;
+    }
+
+    // Criar instâncias de Command por aqui
+    static create(hasToBeAdmin, method /**/)
+    {
+        return new Command(hasToBeAdmin, method, Array.prototype.slice.call(arguments, 2));
+    }
+
+    execute(player /**/) // : bool
+    {
+        if (this.hasToBeAdmin && !player.admin)
+            return false;
+
+        var args = Array.from(arguments).concat(this.services);
+        return this.method(...args);
+    }
+}
+
 const CommandController = class CommandController
 {
     
-    constructor(statsController, teamStatsController) 
+    constructor(statsController) 
     {
+        // Dependências
         this.statsController = statsController;
-        this.teamStatsController = teamStatsController;
 
-        const CommandPermission = class CommandPermission
-        {
-            // Não usar diretamente
-            constructor(hasToBeAdmin, method, services = [])
-            {
-                this.hasToBeAdmin = hasToBeAdmin;
-                this.method = method;
-                this.services = services;
-            }
-
-            // Criar instâncias de ICommandPermission por aqui
-            static Create(hasToBeAdmin, method /**/)
-            {
-                return new CommandPermission(hasToBeAdmin, method, Array.prototype.slice.call(arguments, 2));
-            }
-
-            Execute(player /**/) // : bool
-            {
-                if (this.hasToBeAdmin && !player.admin)
-                    return false;
-
-                var args = Array.from(arguments).concat(this.services);
-                return this.method(...args);
-            }
-        }
-
-        this.CommandsPermissions = {
-            "!Info"                     :   CommandPermission.Create(true,  this.printAdminInfo, this.statsController),
-            "!AllStats"                 :   CommandPermission.Create(true,  this.printStatList, this.statsController),
-            "!FameByS"                  :   CommandPermission.Create(true,  this.printStatsListByScore, this.statsController),
-            "!FameByW"                  :   CommandPermission.Create(true,  this.printStatsListByWin, this.statsController),
-            "!FameByWS"                 :   CommandPermission.Create(true,  this.printStatsListByWinStreak, this.statsController),
-            "!Stats"                    :   CommandPermission.Create(true,  this.printStat, this.statsController),
-            "!Map"                      :   CommandPermission.Create(true,  this.setMap),
-            "!SetPassword"              :   CommandPermission.Create(true,  this.setPassword),
-            "!CleanPassword"            :   CommandPermission.Create(true,  this.cleanPassword)
-        };
+        // Propriedades
+        this.commands = {};
+        
         // Comando Admin Default
-        this.CommandsPermissions[SET_ADMIN_COMMAND_DEFAUT] = CommandPermission.Create(false, this.toogleAdminCommand);
+        this.commands[SET_ADMIN_COMMAND_DEFAUT] = Command.create(false, this.toogleAdminCommand);
+
+        // Comandos custom
+        this.commands["!Info"]            = Command.create(true, this.printAdminInfo, this.statsController);
+        this.commands["!AllStats"]        = Command.create(true, this.printStatList, this.statsController);
+        this.commands["!FameByS"]         = Command.create(true, this.printStatsListByScore, this.statsController);
+        this.commands["!FameByW"]         = Command.create(true, this.printStatsListByWin, this.statsController);
+        this.commands["!FameByWS"]        = Command.create(true, this.printStatsListByWinStreak, this.statsController);
+        this.commands["!Stats"]           = Command.create(true, this.printStat, this.statsController);
+        this.commands["!Map"]             = Command.create(true, this.setMap);
+        this.commands["!SetPassword"]     = Command.create(true, this.setPassword);
+        this.commands["!CleanPassword"]   = Command.create(true, this.cleanPassword);
     }
 
+    execute(player, sCommand, args)
+    {
+        var Command = this.commands[sCommand];
+
+        // Log chamada de comando
+        console.log("Player: " + player.name + " - Comando: " + sCommand + " " + args + " - Admin?: " + player.admin + " - Existe?: " + (Command != null && typeof(Command) != "undefined"));
+
+        // Comando pode não ter sido encontrado, porém ele ainda é considerado uma tentativa.
+        // Logo não será mostrado no chat
+        if (!Command)
+            return true;
+
+        var result = Command.execute(player, ...args);
+
+        if (result && typeof(result) == 'boolean')
+            return result;
+
+        return true;
+    }
+
+
     // Retorna se é ou não um comando (true or false)
-    trataComando(player, message) {
+    tryCommand(player, message) {
         
         if (!message.startsWith("!"))
             return false;
@@ -532,20 +623,9 @@ const CommandController = class CommandController
         
         try 
         {
-            var commandPermission = this.CommandsPermissions[command.shift()];
-
-            // Log chamada de comando
-            console.log("Player: " + player.name + " - Comando: " + message + " - Admin?: " + player.admin + " - Existe?: " + (commandPermission != null && typeof(commandPermission) != "undefined"));
-
-            // Comando pode não ter sido encontrado, porém ele ainda é considerado uma tentativa.
-            // Logo não será mostrado no chat
-            if (commandPermission === null || typeof(commandPermission) === "undefined")
-                return true;
-            
-            commandPermission.Execute(player, ...command);
-            return true;
-
-        } catch (error) 
+            return this.execute(player, command.shift(), command);
+        } 
+        catch (error) 
         {
             // Mesmo que haja erro não é pra mostrar que houve tentativa de comando
             console.error(error);
@@ -562,9 +642,9 @@ const CommandController = class CommandController
     {
         console.log("============================");
         console.log("["+player.name+"] - Info");
-        console.dir(statsControllerInjection.AuthToId);
-        console.dir(statsControllerInjection.stats);
+        console.dir(statsControllerInjection.getPlayers());
         console.log("============================");
+        downloadObjectAsJson(statsControllerInjection.getPlayers(), "Stats");
     }
 
     printStat(player, statsControllerInjection)
@@ -639,77 +719,75 @@ const ChatController = class ChatController
     constructor(commandController)
     {
         this.commandController = commandController;
-
-        // this.chatInterval = 3000; //ms
-
-        // this.players = room.getPlayerList().map((player) => {
-        //     return {"player": player, "lastChatTime": null};
-        // });
     }
 
-    // trataSpamming(player)
-    // {
-    //     var chatPlayer = this.players.find((chatPlayer) => chatPlayer.player.id === player.id);
-
-    //     if (chatPlayer === null || chatPlayer === undefined)
-    //         return false;
-
-    //     if (chatPlayer.lastChatTime === null)
-    //     {
-    //         chatPlayer.lastChatTime = new Date();
-    //         return true;
-    //     }
-
-    //     var atual = new Date();
-    //     var isSpam = atual.getTime() - chatPlayer.lastChatTime.getTime() <= this.chatInterval;
-    //     chatPlayer.lastChatTime = atual;
-
-    //     return isSpam;
-    // }
-
-    // adicionaPlayer(player)
-    // {
-    //     this.players.push({"player": player, "lastChatTime": null});
-    // }
-
-    // removePlayer(player)
-    // {
-    //     this.players = this.players.filter((chatPlayer) => 
-    //     {
-    //         return (chatPlayer.player.id !== player.id);
-    //     });
-    // }
-
-    trataChat(player, message)
-    {   
-        // Tratamento para evitar vazamento do comando no chat
-        //if (message !== SET_ADMIN_COMMAND_DEFAUT && message.toLowerCase().includes(ADMIN_PASSWORD_DEFAUT.toLowerCase()))
-        //    return false;
-
-        // Ativar somente quando a perfomece estiver boa o suficiente
-        // Se true é spam
-        // if (this.trataSpamming(player))
-        //     return false;
-
+    chatTreatment(player, message)
+    {
         // Se for um comando retorna false para que não seja mostrado no chat
-        if (this.commandController.trataComando(player, message))
+        if (this.commandController.tryCommand(player, message))
             return false;
 
         // Abre novas possibilidades de tratamento aqui
         return true;
     }
+
+    validLunchBreak()
+    {
+        var flag = false;
+        var d = new Date();
+        var n = d.getHours();
+        if (n == 14) {
+            n = d.getMinutes();
+            if (n >= 0) {
+                if (!flag)
+                {
+                    downloadObjectAsJson(statsController.getPlayers(), "PlayersStats_14_00");
+                    flag = true;
+                }
+                
+                room.sendAnnouncement("⏰ CIRCULANDO PESSOAL, CIRCULANDO...", null, getRandomColorInt(), null, 1);
+            }
+        }
+    }
+
+    sendGoalMessage(teamID)
+    {
+        var i = Math.floor((Math.random() * LISTA_MENSAGENS_DE_GOL.length));
+        var mensagem = (teamID == 1) ? "[🔴] " : "[🔵] ";
+        try 
+        {
+            mensagem += LISTA_MENSAGENS_DE_GOL[i];
+        } catch (error) {
+            mensagem += MENSAGEM_DEFAULT;
+        }
+
+        room.sendAnnouncement(mensagem, null, 0xFF0000, null, 1);
+    }
+
+    handlePlayerBallKick()
+    {
+        this.validLunchBreak();
+    }
+
+    handleTeamGoal(teamID)
+    {
+        this.sendGoalMessage(teamID);
+    }
 }
 
-
-
+// Startup
 // Constantes da sala
-const statsController = new StatsController();
-const teamStatsController = new TeamStatsController(statsController);
-const commandController = new CommandController(statsController, teamStatsController);
-const chatController = new ChatController(commandController);
+const playerController = new PlayerController();
 
-// Variáveis da sala
-let playersThatTouchedTheBall = new Array();
+const statsController = new StatsController(playerController);
+
+const teamsController = new TeamsController(statsController);
+
+const matchController = new MatchController(statsController);
+
+const commandController = new CommandController(statsController);
+
+const chatController = new ChatController(commandController);
 
 // Eventos da sala
 let CONN_ID;
@@ -726,54 +804,47 @@ room.onPlayerJoin = function (player)
 
     room.sendAnnouncement("["+BOT_NAME+"] 👋 Bem vindo(a), " + player.name + "!", null, PRIMARY_COLOR_DEFAULT, "bold", 1);
 
-    //chatController.adicionaPlayer(player);
-
-    statsController.newPlayer(player);
+    playerController.newPlayer(player);
 }
 
-room.onPlayerLeave = function (player) 
+room.onGameTick = function ()
 {
-    //chatController.removePlayer(player);
+    matchController.handleGameTick();
 }
-
-room.onGameTick = handleBallTouch;
 
 room.onPlayerBallKick = function (player) 
 {
-    verificaAlmoco();
+    chatController.handlePlayerBallKick();
 }
 
 room.onGameStart = function(byPlayer)
 {
     // Dados ficam guardados até o início da próxima partida
-    teamStatsController.onGameStart();
-
-    // Reset the set of players that reached the goal
-    playersThatTouchedTheBall = new Array(); 
+    matchController.handleGameStart();
+    teamsController.handleGameStart();
 }
 
 room.onTeamVictory = function(scores)
 {
-    teamStatsController.onTeamVictory(scores);
-    statsController.onTeamVictory(scores);
+    teamsController.handleTeamVictory(scores);
+    matchController.handleTeamVictory(scores);
+    statsController.handleTeamVictory(scores);
 }
 
 room.onTeamGoal = function(teamID) {
 
-    if (playersThatTouchedTheBall.size <= 0)
+    if (matchController.playersThatTouchedTheBall.size <= 0)
         return;
 
     // Mensagem troll de gol
-    mensagemGol(teamID);
+    chatController.handleTeamGoal(teamID);
     
-    let striker = playersThatTouchedTheBall.pop();
-    console.log(striker);
+    let striker = matchController.playersThatTouchedTheBall.pop();
     striker = (striker) ? room.getPlayer(striker) : null;
-    console.log(striker);
     if (!striker)
         return;
 
-    let assistant = playersThatTouchedTheBall.pop();
+    let assistant = matchController.playersThatTouchedTheBall.pop();
     assistant = (assistant) ? room.getPlayer(assistant): null;
 
     let golContra = false;
@@ -797,8 +868,9 @@ room.onTeamGoal = function(teamID) {
             assistant = null;
     }
 
-    teamStatsController.onTeamGoal(teamID, striker, assistant, golContra);
-    statsController.onTeamGoal(striker, assistant);
+    teamsController.handleTeamGoal(teamID);
+    matchController.handleTeamGoal(teamID, striker, assistant, golContra);
+    statsController.handleTeamGoal(striker, assistant);
     
 }
 
@@ -807,68 +879,22 @@ room.onPlayerChat = function(player, message)
     // Outros códigos podem ser feitos aqui ainda
 
     // Caso retorne false no TrataComando trata-se de n ser um comando personalizado
-    return chatController.trataChat(player, message);
+    return chatController.chatTreatment(player, message);
 }
 
-
-// Métodos
-function mensagemGol(teamID)
-{   
-    var i = Math.floor((Math.random() * LISTA_MENSAGENS_DE_GOL.length));
-    var mensagem = (teamID == 1) ? "[🔴] " : "[🔵] ";
-    try 
-    {
-        mensagem += LISTA_MENSAGENS_DE_GOL[i];
-    } catch (error) {
-        mensagem += MENSAGEM_DEFAULT;
-    }
-
-    room.sendAnnouncement(mensagem, null, 0xFF0000, null, 1);
-}
-
-function verificaAlmoco()
-{
-    var d = new Date();
-    var n = d.getHours();
-    if (n == 14) {
-        n = d.getMinutes();
-        if (n >= 00) {
-            room.sendAnnouncement("⏰ CIRCULANDO PESSOAL, CIRCULANDO...", null, getRandomColorInt(), null, 1);
-        }
-    }
-}
-
-function handleBallTouch() {
-    
-    var players_playing = room.getPlayerList().filter(p => p.team != 0);
-	var ballPosition = room.getBallPosition();
-	const ballRadius = 6.4;
-	const playerRadius = 15;
-	var triggerDistance = ballRadius + playerRadius + 0.01;
-
-	players_playing.forEach((player) => {
-
-		var distanceToBall = pointDistance(player.position, ballPosition);
-        if ( distanceToBall < triggerDistance ) {
-
-            var p = playersThatTouchedTheBall.find((p) =>p === player.id);
-            var index = playersThatTouchedTheBall.indexOf(p);
-            if (index <= -1)
-            {
-                playersThatTouchedTheBall.push(player.id);
-            }
-            else
-            {
-                playersThatTouchedTheBall.splice(index, 1);
-                playersThatTouchedTheBall.push(player.id);
-            }
-
-            teamStatsController.onPlayerBallKick(player);
-        }
-	});
-}
 
 // Utils
+function getMatchTimeString()
+{
+    var time = room.getScores().time;
+    var mins = ~~((time % 3600) / 60);
+    var secs = ~~time % 60;
+
+    var ret = (mins < 10 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "");
+    ret += "" + secs;
+    return ret;
+}
+
 function getRandomColorInt()
 {
     return '0x'+(Math.random()*0xFFFFFF<<0).toString(16);
@@ -885,3 +911,13 @@ function pointDistance(p1, p2)
 	var d2 = p1.y - p2.y;
 	return Math.sqrt(d1 * d1 + d2 * d2);
 }
+
+function downloadObjectAsJson(exportObj, exportName){
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+    var downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("download", exportName + ".json");
+    document.body.appendChild(downloadAnchorNode); // required for firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  }
