@@ -88,7 +88,7 @@ const TeamStats = class TeamStats
 {
     constructor(key)
     {
-        this.key = key
+        this.key = key;
         this.wins = 0;
         this.losses = 0;
         this.score = 0;
@@ -172,7 +172,7 @@ const TeamsController = class TeamsController
     {
         // Red team
         let red_players_playing_auths = room.getPlayerList()
-        .filter(p => p.team == 1)
+        .filter((p) => p.team == 1)
         .map((p) => 
         {
             let player = this.statsController.getPlayer(p.id);
@@ -185,7 +185,7 @@ const TeamsController = class TeamsController
 
         // Blue team
         let blue_players_playing_auths = room.getPlayerList()
-        .filter(p => p.team == 2)
+        .filter((p) => p.team == 2)
         .map((p) => 
         {
             let player = this.statsController.getPlayer(p.id);
@@ -202,7 +202,9 @@ const TeamsController = class TeamsController
         let teamStats = this.tryGetCurrentTeam(striker.team);
         
         if (teamStats)
+        {
             teamStats.score++;
+        }
     }
 
     handleTeamVictory(scores)
@@ -257,9 +259,13 @@ const MatchController = class MatchController
         this.currentMatchStats.strikers.forEach((value, key) =>
         {
             if (!value.golContra)
-                text += "(" + (value.team == 1 ? "🔴" : "🔵") + "["+ key +"] " + value.striker.name + (value.assistant != null ? " (Assist: "+ value.assistant.name +") ) " : " ) ");
+            {
+                text += "(" + (value.team === 1 ? "🔴" : "🔵") + "["+ key +"] " + value.striker.name + (value.assistant !== null ? " (Assist: "+ value.assistant.name +") ) " : " ) ");
+            }
             else
-                text += "(" + (value.team == 1 ? "🔴" : "🔵") + "["+ key +"] ❌(Contra) " + value.striker.name + " ) ";
+            {
+                text += "(" + (value.team === 1 ? "🔴" : "🔵") + "["+ key +"] ❌(Contra) " + value.striker.name + " ) ";
+            }
         });
         // Retira
         text = text.slice(0, -1);
