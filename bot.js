@@ -529,7 +529,7 @@ const PlayerController = class PlayerController
             // Atualizando referência
             this.AuthToId[player.auth] = player.id;
             // Removendo dados do id anterior;
-            delete this.playerController.players[oldID];
+            delete this.players[oldID];
             return;
         }
 
