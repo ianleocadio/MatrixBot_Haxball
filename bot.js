@@ -65,7 +65,7 @@ room.setTeamColors(...RED_TEAM_COLORS_DEFAULT);
 room.setTeamColors(...BLUE_TEAM_COLORS_DEFAULT);
 
 // Modelos
-const MatchStats = class MatchStats
+class MatchStats
 {
     constructor()
     {
@@ -84,7 +84,7 @@ const MatchStats = class MatchStats
     }
 }
 
-const TeamStats = class TeamStats
+class TeamStats
 {
     constructor(key)
     {
@@ -99,7 +99,7 @@ const TeamStats = class TeamStats
     }
 }
 
-const Stats = class Stats
+class Stats
 {
     constructor()
     {
@@ -113,7 +113,7 @@ const Stats = class Stats
     }
 }
 
-const Player = class Player
+class Player
 {
     constructor(auth, name)
     {
@@ -123,7 +123,7 @@ const Player = class Player
     }
 }
 
-const TeamsController = class TeamsController
+class TeamsController
 {
     constructor(statsController)
     {
@@ -233,7 +233,7 @@ const TeamsController = class TeamsController
     
 }
 
-const MatchController = class MatchController
+class MatchController
 {
     constructor(statsController)
     {
@@ -345,7 +345,7 @@ const MatchController = class MatchController
     }
 }
 
-const StatsController = class StatsController
+class StatsController
 {
     constructor(playerController)
     {
@@ -514,7 +514,7 @@ const StatsController = class StatsController
 
 }
 
-const PlayerController = class PlayerController
+class PlayerController
 {
     constructor()
     {
@@ -546,7 +546,7 @@ const PlayerController = class PlayerController
 }
 
 
-const Command = class Command
+class Command
 {
     // Não usar diretamente
     constructor(hasToBeAdmin, method, services = [])
@@ -572,7 +572,7 @@ const Command = class Command
     }
 }
 
-const CommandController = class CommandController
+class CommandController
 {
     
     constructor(statsController) 
@@ -720,7 +720,7 @@ const CommandController = class CommandController
     }
 }
 
-const ChatController = class ChatController
+class ChatController
 {
     constructor(commandController)
     {
