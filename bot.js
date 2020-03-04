@@ -48,9 +48,9 @@ const room = HBInit({
     maxPlayers: MAX_PLAYERS,
     noPlayer: true,
     playerName: BOT_NAME,
-    public: true,
+    public: false,
     // https://www.haxball.com/headlesstoken
-    token: "thr1.AAAAAF5YS8A9bvctSR5MQA.ccIw2KTaiBI"
+    token: "thr1.AAAAAF5e-cCNpMwseOQgAg.DL6-ZhcI26A"
 });
 
 // Configurações da sala
@@ -65,12 +65,10 @@ room.setTeamColors(...RED_TEAM_COLORS_DEFAULT);
 room.setTeamColors(...BLUE_TEAM_COLORS_DEFAULT);
 
 // Modelos
-class MatchStats
-{
-    constructor()
-    {
-            // Red team
-            this[1] = {
+class MatchStats {
+    constructor() {
+        // Red team
+        this[1] = {
                 qtdToques: 0,
                 posse: 0
             },
@@ -84,10 +82,8 @@ class MatchStats
     }
 }
 
-class TeamStats
-{
-    constructor(key)
-    {
+class TeamStats {
+    constructor(key) {
         this.key = key;
         this.wins = 0;
         this.losses = 0;
@@ -99,10 +95,8 @@ class TeamStats
     }
 }
 
-class Stats
-{
-    constructor()
-    {
+class Stats {
+    constructor() {
         this.wins = 0;
         this.losses = 0;
         this.score = 0;
@@ -113,20 +107,16 @@ class Stats
     }
 }
 
-class Player
-{
-    constructor(auth, name)
-    {
+class Player {
+    constructor(auth, name) {
         this.auth = auth;
         this.name = name;
         this.stats = new Stats();
     }
 }
 
-class TeamsController
-{
-    constructor(statsController)
-    {
+class TeamsController {
+    constructor(statsController) {
         // Dependências
         this.statsController = statsController;
 
@@ -136,8 +126,7 @@ class TeamsController
 
     // Métodos
 
-    tryGetOrAddTeam(playersPlayingAuths)
-    {
+    tryGetOrAddTeam(playersPlayingAuths) {
         if (!playersPlayingAuths || typeof(playersPlayingAuths) !== "array" || playersPlayingAuths.length <= 0)
             return null;
 
@@ -145,76 +134,68 @@ class TeamsController
 
         if (key === "")
             return null;
-        
+
         if (this.teams.has(key))
             return this.teams.get(key);
-        
+
         return this.teams.set(key, new TeamStats(key));
     }
 
-    tryGetCurrentTeam(teamID)
-    {
+    tryGetCurrentTeam(teamID) {
         let auths = room.getPlayerList()
-        .filter(p => p.team == teamID)
-        .map(p => this.statsController.getPlayer(p.id).auth);
+            .filter(p => p.team == teamID)
+            .map(p => this.statsController.getPlayer(p.id).auth);
 
         var teamStats = this.teams.get(auths);
 
         if (!teamStats)
-            return null;    
+            return null;
 
         return teamStats;
     }
 
     // Eventos
 
-    handleGameStart()
-    {
+    handleGameStart() {
         // Red team
         let red_players_playing_auths = room.getPlayerList()
-        .filter((p) => p.team == 1)
-        .map((p) => 
-        {
-            let player = this.statsController.getPlayer(p.id);
-            if (player)
-                return player.auth;
+            .filter((p) => p.team == 1)
+            .map((p) => {
+                let player = this.statsController.getPlayer(p.id);
+                if (player)
+                    return player.auth;
 
-        }).sort();
+            }).sort();
 
         this.tryGetOrAddTeam(red_players_playing_auths);
 
         // Blue team
         let blue_players_playing_auths = room.getPlayerList()
-        .filter((p) => p.team == 2)
-        .map((p) => 
-        {
-            let player = this.statsController.getPlayer(p.id);
-            if (player)
-                return player.auth;
+            .filter((p) => p.team == 2)
+            .map((p) => {
+                let player = this.statsController.getPlayer(p.id);
+                if (player)
+                    return player.auth;
 
-        }).sort();
+            }).sort();
 
         this.tryGetOrAddTeam(blue_players_playing_auths);
     }
 
-    handleTeamGoal(striker)
-    {
+    handleTeamGoal(striker) {
         let teamStats = this.tryGetCurrentTeam(striker.team);
-        
-        if (teamStats)
-        {
+
+        if (teamStats) {
             teamStats.score++;
         }
     }
 
-    handleTeamVictory(scores)
-    {   
+    handleTeamVictory(scores) {
         var teamWonID = scores.red > scores.blue ? 1 : 2;
 
         let teamWonStats = this.tryGetCurrentTeam(teamWonID);
 
-        if (teamWonStats)
-        {
+        if (teamWonStats) {
             teamWonStats.wins++;
             teamWonStats.winStreakAtual++;
 
@@ -223,20 +204,17 @@ class TeamsController
         }
 
         let teamLostStats = this.tryGetCurrentTeam(teamWonID == 1 ? 2 : 1);
-        
-        if (teamLostStats)
-        {
+
+        if (teamLostStats) {
             teamLostStats.losses++;
             teamLostStats.winStreakAtual = 0;
         }
     }
-    
+
 }
 
-class MatchController
-{
-    constructor(statsController)
-    {
+class MatchController {
+    constructor(statsController) {
         // Dependências
         this.statsController = statsController;
 
@@ -246,25 +224,19 @@ class MatchController
     }
 
     // Métodos
-    restartMatchStats()
-    {
+    restartMatchStats() {
         this.currentMatchStats = new MatchStats();
         this.playersThatTouchedTheBall = new Array();
     }
 
-    printStrikers()
-    {
+    printStrikers() {
         room.sendAnnouncement("Artilheiros da partida:", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         var text = "";
-        this.currentMatchStats.strikers.forEach((value, key) =>
-        {
-            if (!value.golContra)
-            {
-                text += "(" + (value.team === 1 ? "🔴" : "🔵") + "["+ key +"] " + value.striker.name + (value.assistant !== null ? " (Assist: "+ value.assistant.name +") ) " : " ) ");
-            }
-            else
-            {
-                text += "(" + (value.team === 1 ? "🔴" : "🔵") + "["+ key +"] ❌(Contra) " + value.striker.name + " ) ";
+        this.currentMatchStats.strikers.forEach((value, key) => {
+            if (!value.golContra) {
+                text += "(" + (value.team === 1 ? "🔴" : "🔵") + "[" + key + "] " + value.striker.name + (value.assistant !== null ? " (Assist: " + value.assistant.name + ") ) " : " ) ");
+            } else {
+                text += "(" + (value.team === 1 ? "🔴" : "🔵") + "[" + key + "] ❌(Contra) " + value.striker.name + " ) ";
             }
         });
         // Retira
@@ -272,43 +244,37 @@ class MatchController
         room.sendAnnouncement(text, null, SECONDARY_COLOR_DEFAULT, null, 0);
     }
 
-    printPossession()
-    {
+    printPossession() {
         room.sendAnnouncement("Posse de bola 🔴 " + this.currentMatchStats[1].posse + "% : " + this.currentMatchStats[2].posse + "% 🔵", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
     }
 
-    calculatePossession()
-    {
+    calculatePossession() {
         this.currentMatchStats[1].posse = 100 * this.currentMatchStats[1].qtdToques / (this.currentMatchStats[1].qtdToques + this.currentMatchStats[2].qtdToques);
         this.currentMatchStats[1].posse = Math.round(isNaN(this.currentMatchStats[1].posse) ? 0 : this.currentMatchStats[1].posse);
         this.currentMatchStats[2].posse = 100 - this.currentMatchStats[1].posse;
     }
 
-    handleGameTick()
-    {
+    handleGameTick() {
         var players_playing = room.getPlayerList().filter(p => p.team != 0);
         var ballPosition = room.getBallPosition();
         const ballRadius = 6.4;
         const playerRadius = 15;
         var triggerDistance = ballRadius + playerRadius + 0.01;
-    
+
         players_playing.forEach((player) => {
-    
+
             var distanceToBall = pointDistance(player.position, ballPosition);
-            if ( distanceToBall < triggerDistance ) {
-    
-                var p = this.playersThatTouchedTheBall.find((p) =>p === player.id);
+            if (distanceToBall < triggerDistance) {
+
+                var p = this.playersThatTouchedTheBall.find((p) => p === player.id);
                 var index = this.playersThatTouchedTheBall.indexOf(p);
-                if (index <= -1)
-                {
+                if (index <= -1) {
                     this.playersThatTouchedTheBall.push(player.id);
-                }
-                else
-                {
+                } else {
                     this.playersThatTouchedTheBall.splice(index, 1);
                     this.playersThatTouchedTheBall.push(player.id);
                 }
-    
+
                 this.currentMatchStats[player.team].qtdToques++;
             }
         });
@@ -316,18 +282,15 @@ class MatchController
 
 
     // Eventos
-    handleGameStart()
-    {
+    handleGameStart() {
         this.restartMatchStats();
     }
 
-    handleTeamGoal(teamID, striker, assistant, golContra)
-    {
+    handleTeamGoal(teamID, striker, assistant, golContra) {
         if (striker == null)
             return;
 
-        this.currentMatchStats.strikers.set(getMatchTimeString(), 
-        {
+        this.currentMatchStats.strikers.set(getMatchTimeString(), {
             "striker": striker,
             "assistant": (assistant != null && assistant.id != striker.id) ? assistant : null,
             "team": teamID,
@@ -335,198 +298,184 @@ class MatchController
         });
     }
 
-    handleTeamVictory(scores)
-    {
+    handleTeamVictory(scores) {
         var teamWonID = (scores.red > scores.blue) ? 1 : 2;
         this.calculatePossession();
-        room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID == 1 ? "🔴" : "🔵") + " ("+ scores.red + "x" + scores.blue +")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
+        room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID == 1 ? "🔴" : "🔵") + " (" + scores.red + "x" + scores.blue + ")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
         this.printPossession();
         this.printStrikers();
     }
 }
 
-class StatsController
-{
-    constructor(playerController)
-    {
+class StatsController {
+    constructor(playerController) {
         this.playerController = playerController;
     }
 
-    getPlayer(id)
-    {
+    getPlayer(id) {
         return this.playerController.players[id];
     }
 
-    getPlayers()
-    {
+    getPlayers() {
         return this.playerController.players;
     }
 
-    printPlayerStat(id, sendToAll = false)
-    {
-        var rate = parseInt(this.getPlayer(id).stats.rate);
-        var text = "[" + this.getPlayer(id).name + "]"
-                    + " 🏆 Vitórias: " + this.getPlayer(id).stats.wins
-                    + ", 💩 Derrotas: " + this.getPlayer(id).stats.losses
-                    + ", 📊 Aproveitamento: " + (isNaN(rate) ? 0 : rate) + "%"
-                    + ", ⚽ Gols: " + this.getPlayer(id).stats.score 
-                    + ", 🏃‍♂️ Assistências: " + this.getPlayer(id).stats.assists;
-        
+    printPlayerStat(id, sendToAll = false) {
+
+        var player = this.getPlayer(id);
+
+        var rate = parseInt(player.stats.rate);
+        var text = "[" + player.name + "]" +
+            " 🏆 Vitórias: " + player.stats.wins +
+            ", 💩 Derrotas: " + player.stats.losses +
+            ", 📊 Aproveitamento: " + (isNaN(rate) ? 0 : rate) + "%" +
+            ", ⚽ Gols: " + player.stats.score +
+            ", 🏃‍♂️ Assistências: " + player.stats.assists;
+
         if (sendToAll)
             room.sendAnnouncement(text, null, 0xFFFF00, null, 0);
         else
             room.sendChat(text, id);
     }
 
-    printStatList()
-    {
+    printStatList() {
         room.sendAnnouncement(">>>>>>>>>>>>> Lista de Status Geral <<<<<<<<<<<<<", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
-        Object.keys(this.getPlayers()).map((playerID) => 
-        {
+        Object.keys(this.getPlayers()).map((playerID) => {
             this.printPlayerStat(playerID, true);
         });
     }
 
-    printStatsListByScore()
-    {
+    printStatsListByScore() {
         room.sendAnnouncement(">>>>>>>>>>>>> Hall of Fame (⚽ Gols) <<<<<<<<<<<<<", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
         Object.values(this.getPlayers())
-        .sort((p1,p2) =>
-        {
-            if (p1.stats.score < p2.stats.score)
-                return 1;
-            else if (p1.stats.score > p2.stats.score)
-                return -1;
-            else
-                return 0;
-        })
-        .forEach((player, i) => 
-        {
-            room.sendAnnouncement( (i + 1) + "º) "+ player.name +" - ⚽ Gols: " + player.stats.score, null, 0xFFFF00, null, 0);
-        });
+            .sort((p1, p2) => {
+                if (p1.stats.score < p2.stats.score)
+                    return 1;
+                else if (p1.stats.score > p2.stats.score)
+                    return -1;
+                else
+                    return 0;
+            })
+            .forEach((player, i) => {
+                room.sendAnnouncement((i + 1) + "º) " + player.name + " - ⚽ Gols: " + player.stats.score, null, 0xFFFF00, null, 0);
+            });
     }
 
-    printStatsListByWin()
-    {
+    printStatsListByWin() {
         room.sendAnnouncement(">>>>>>>>>>>>> Hall of Fame (🏆 Vitórias) <<<<<<<<<<<<<", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
         Object.values(this.getPlayers())
-        .sort((p1,p2) =>
-        {
-            if (p1.stats.wins < p2.stats.wins)
-                return 1;
-            else if (p1.stats.wins > p2.stats.wins)
-                return -1;
-            else
-                return 0;
-        })
-        .forEach((player, i) => 
-        {
-            room.sendAnnouncement( (i + 1) + "º) "+ player.name +" - 🏆 Vitórias: " + player.stats.wins, null, 0xFFFF00, null, 0);
-        });
+            .sort((p1, p2) => {
+                if (p1.stats.wins < p2.stats.wins)
+                    return 1;
+                else if (p1.stats.wins > p2.stats.wins)
+                    return -1;
+                else
+                    return 0;
+            })
+            .forEach((player, i) => {
+                room.sendAnnouncement((i + 1) + "º) " + player.name + " - 🏆 Vitórias: " + player.stats.wins, null, 0xFFFF00, null, 0);
+            });
     }
 
-    printStatsListByWinStreak()
-    {
+    printStatsListByWinStreak() {
         room.sendAnnouncement(">>>>>>>>>>>>> Hall of Fame (🏆 Vitórias em sequência) <<<<<<<<<<<<<", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
         // Players IDs
         Object.values(this.getPlayers())
-        .sort((p1,p2) =>
-        {
-            if (p1.stats.winStreak < p2.stats.winStreak)
-                return 1;
-            else if (p1.stats.winStreak > p2.stats.winStreak)
-                return -1;
-            else
-                return 0;
-        })
-        .forEach((player, i) => 
-        {
-            room.sendAnnouncement( (i + 1) + "º) "+ player.name +" - 🏆 Vitórias em sequência: " + player.stats.winStreak, null, 0xFFFF00, null, 0);
-        });
+            .sort((p1, p2) => {
+                if (p1.stats.winStreak < p2.stats.winStreak)
+                    return 1;
+                else if (p1.stats.winStreak > p2.stats.winStreak)
+                    return -1;
+                else
+                    return 0;
+            })
+            .forEach((player, i) => {
+                room.sendAnnouncement((i + 1) + "º) " + player.name + " - 🏆 Vitórias em sequência: " + player.stats.winStreak, null, 0xFFFF00, null, 0);
+            });
     }
 
-    notifyLongWinStreak(playerID)
-    {
-        if (this.getPlayer(playerID).stats.winstreakAtual < 5)
+    notifyLongWinStreak(playerID) {
+
+        var player = this.getPlayer(playerID);
+
+        if (!player || player.stats.winStreakAtual < 5)
             return;
-        
+
         var text;
 
-        if (this.getPlayer(playerID).stats.losses === 0)
-            text = "[" + this.getPlayer(playerID).name + "] está INVICTO em uma sequência de " 
-            + this.getPlayer(playerID).stats.winstreakAtual +" vitórias 🏆";
+        if (player.stats.losses === 0)
+            text = "[" + player.name + "] está INVICTO em uma sequência de " +
+            player.stats.winStreakAtual + " vitórias 🏆";
         else
-            text = "[" + this.getPlayer(playerID).name + "] está em uma sequência de "
-            + this.getPlayer(playerID).stats.winstreakAtual +" vitórias 🏆";
+            text = "[" + player.name + "] está em uma sequência de " +
+            player.stats.winStreakAtual + " vitórias 🏆";
 
         room.sendAnnouncement(text, null, TERNARY_COLOR_DEFAULT, "bold", 1);
     }
 
-    handleTeamVictory(scores)
-    {
-        var players_playing = room.getPlayerList().filter((player) => player.team != 0 );
+    handleTeamVictory(scores) {
+        var players_playing = room.getPlayerList().filter((player) => player.team != 0);
         var teamWonId = (scores.red > scores.blue) ? 1 : 2;
-        
+
         if (SHOW_STATS_ON_VICTORY)
             room.sendAnnouncement(">>>>>>>> Status dos jogadores da partida <<<<<<<<", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
 
-        players_playing.forEach((player) =>
-        {
+        players_playing.forEach((player) => {
             var playerStats = this.getPlayer(player.id).stats;
-            if (player.team == teamWonId)
-            {
+            if (player.team == teamWonId) {
                 playerStats.wins++;
-                playerStats.winstreakAtual++;
+                playerStats.winStreakAtual++;
 
-                if (playerStats.winstreakAtual > playerStats.winstreak)
-                    playerStats.winstreak = playerStats.winstreakAtual;
-            }
-            else
-            {
+                if (playerStats.winStreakAtual > playerStats.winstreak)
+                    playerStats.winstreak = playerStats.winStreakAtual;
+            } else {
                 playerStats.losses++;
-                playerStats.winstreakAtual = 0;
+                playerStats.winStreakAtual = 0;
             }
 
-            playerStats.rate = 100 * (playerStats.wins 
-                / (playerStats.wins + playerStats.losses));
+            playerStats.rate = 100 * (playerStats.wins /
+                (playerStats.wins + playerStats.losses));
 
             if (SHOW_STATS_ON_VICTORY)
                 this.printPlayerStat(player.id, true);
         });
-        
+
         players_playing.forEach((player) => this.notifyLongWinStreak(player.id));
     }
 
-    handleTeamGoal(striker, assistant)
-    {
+    handleTeamGoal(striker, assistant) {
+
+        var strikerStats = this.getPlayer(striker.id).stats;
+
         // Caso o striker exista na lista de stats, adiciona o score
-        if (this.getPlayer(striker.id)) 
-            this.getPlayer(striker.id).stats.score += 1;
+        if (strikerStats) {
+            strikerStats.score += 1;
+        }
 
         // Caso o assistente seja diferente do striker adiciona a assistência
-        if (assistant != null && assistant.id != striker.id && this.getPlayer(assistant.id))
-            this.getPlayer(assistant.id).stats.assists += 1;
+        if (assistant != null && assistant.id != striker.id) {
+            var assistantStats = this.getPlayer(assistant.id).stats;
+            if (assistantStats) {
+                assistantStats.assists += 1;
+            }
+        }
 
     }
 
 }
 
-class PlayerController
-{
-    constructor()
-    {
+class PlayerController {
+    constructor() {
         // Propriedades
         this.AuthToId = {};
         this.players = {};
     }
 
-    newPlayer(player)
-    {   
-        if (this.AuthToId.hasOwnProperty(player.auth))
-        {
+    newPlayer(player) {
+        if (this.AuthToId.hasOwnProperty(player.auth)) {
             var oldID = this.AuthToId[player.auth];
             // Renovando chave
             this.players[player.id] = this.players[oldID];
@@ -546,60 +495,54 @@ class PlayerController
 }
 
 
-class Command
-{
+class Command {
     // Não usar diretamente
-    constructor(hasToBeAdmin, method, services = [])
-    {
+    constructor(hasToBeAdmin, method, services = []) {
         this.hasToBeAdmin = hasToBeAdmin;
         this.method = method;
         this.services = services;
     }
 
     // Criar instâncias de Command por aqui
-    static create(hasToBeAdmin, method /**/)
-    {
+    static create(hasToBeAdmin, method /**/ ) {
         return new Command(hasToBeAdmin, method, Array.prototype.slice.call(arguments, 2));
     }
 
-    execute(player /**/) // : bool
-    {
-        if (this.hasToBeAdmin && !player.admin)
-            return false;
+    execute(player /**/ ) // : bool
+        {
+            if (this.hasToBeAdmin && !player.admin)
+                return false;
 
-        var args = Array.from(arguments).concat(this.services);
-        return this.method(...args);
-    }
+            var args = Array.from(arguments).concat(this.services);
+            return this.method(...args);
+        }
 }
 
-class CommandController
-{
-    
-    constructor(statsController) 
-    {
+class CommandController {
+
+    constructor(statsController) {
         // Dependências
         this.statsController = statsController;
 
         // Propriedades
         this.commands = {};
-        
+
         // Comando Admin Default
         this.commands[SET_ADMIN_COMMAND_DEFAUT] = Command.create(false, this.toogleAdminCommand);
 
         // Comandos custom
-        this.commands["!Info"]            = Command.create(true, this.printAdminInfo, this.statsController);
-        this.commands["!AllStats"]        = Command.create(true, this.printStatList, this.statsController);
-        this.commands["!FameByS"]         = Command.create(true, this.printStatsListByScore, this.statsController);
-        this.commands["!FameByW"]         = Command.create(true, this.printStatsListByWin, this.statsController);
-        this.commands["!FameByWS"]        = Command.create(true, this.printStatsListByWinStreak, this.statsController);
-        this.commands["!Stats"]           = Command.create(true, this.printStat, this.statsController);
-        this.commands["!Map"]             = Command.create(true, this.setMap);
-        this.commands["!SetPassword"]     = Command.create(true, this.setPassword);
-        this.commands["!CleanPassword"]   = Command.create(true, this.cleanPassword);
+        this.commands["!Info"] = Command.create(true, this.printAdminInfo, this.statsController);
+        this.commands["!AllStats"] = Command.create(true, this.printStatList, this.statsController);
+        this.commands["!FameByS"] = Command.create(true, this.printStatsListByScore, this.statsController);
+        this.commands["!FameByW"] = Command.create(true, this.printStatsListByWin, this.statsController);
+        this.commands["!FameByWS"] = Command.create(true, this.printStatsListByWinStreak, this.statsController);
+        this.commands["!Stats"] = Command.create(true, this.printStat, this.statsController);
+        this.commands["!Map"] = Command.create(true, this.setMap);
+        this.commands["!SetPassword"] = Command.create(true, this.setPassword);
+        this.commands["!CleanPassword"] = Command.create(true, this.cleanPassword);
     }
 
-    execute(player, sCommand, args)
-    {
+    execute(player, sCommand, args) {
         var Command = this.commands[sCommand];
 
         // Log chamada de comando
@@ -621,75 +564,62 @@ class CommandController
 
     // Retorna se é ou não um comando (true or false)
     tryCommand(player, message) {
-        
+
         if (!message.startsWith("!"))
             return false;
 
         var command = message.split(" ");
-        
-        try 
-        {
+
+        try {
             return this.execute(player, command.shift(), command);
-        } 
-        catch (error) 
-        {
+        } catch (error) {
             // Mesmo que haja erro não é pra mostrar que houve tentativa de comando
             console.error(error);
             return true;
-        }         
+        }
     }
 
-    toogleAdminCommand(player, _) 
-    {
+    toogleAdminCommand(player, _) {
         room.setPlayerAdmin(player.id, !player.admin);
     }
 
-    printAdminInfo(player, statsControllerInjection)
-    {
+    printAdminInfo(player, statsControllerInjection) {
         console.log("============================");
-        console.log("["+player.name+"] - Info");
+        console.log("[" + player.name + "] - Info");
         console.dir(statsControllerInjection.getPlayers());
         console.log("============================");
         downloadObjectAsJson(statsControllerInjection.getPlayers(), "Stats");
     }
 
-    printStat(player, statsControllerInjection)
-    {
+    printStat(player, statsControllerInjection) {
         statsControllerInjection.printPlayerStat(player.id, true);
     }
 
-    printStatList(_, statsControllerInjection)
-    {
+    printStatList(_, statsControllerInjection) {
         statsControllerInjection.printStatList();
     }
 
-    printStatsListByScore(_, statsControllerInjection)
-    {
+    printStatsListByScore(_, statsControllerInjection) {
         statsControllerInjection.printStatsListByScore();
     }
 
-    printStatsListByWin(_, statsControllerInjection)
-    {
+    printStatsListByWin(_, statsControllerInjection) {
         statsControllerInjection.printStatsListByWin();
     }
 
-    printStatsListByWinStreak(_, statsControllerInjection)
-    {
+    printStatsListByWinStreak(_, statsControllerInjection) {
         statsControllerInjection.printStatsListByWinStreak();
     }
 
-    setPassword(_, password)
-    {
+    setPassword(_, password) {
         room.setPassword(password);
     }
 
-    cleanPassword()
-    {
+    cleanPassword() {
         room.setPassword(null);
     }
 
-    setMap(_, map)
-    {
+    setMap(_, map) {
         switch (map) {
             case "1x":
                 room.setCustomStadium(mapa_1x1_2x2);
@@ -720,15 +650,12 @@ class CommandController
     }
 }
 
-class ChatController
-{
-    constructor(commandController)
-    {
+class ChatController {
+    constructor(commandController) {
         this.commandController = commandController;
     }
 
-    chatTreatment(player, message)
-    {
+    chatTreatment(player, message) {
         // Se for um comando retorna false para que não seja mostrado no chat
         if (this.commandController.tryCommand(player, message))
             return false;
@@ -737,31 +664,27 @@ class ChatController
         return true;
     }
 
-    validLunchBreak()
-    {
+    validLunchBreak() {
         var flag = false;
         var d = new Date();
         var n = d.getHours();
         if (n == 14) {
             n = d.getMinutes();
             if (n >= 0) {
-                if (!flag)
-                {
+                if (!flag) {
                     downloadObjectAsJson(statsController.getPlayers(), "PlayersStats_14_00");
                     flag = true;
                 }
-                
+
                 room.sendAnnouncement("⏰ CIRCULANDO PESSOAL, CIRCULANDO...", null, getRandomColorInt(), null, 1);
             }
         }
     }
 
-    sendGoalMessage(teamID)
-    {
+    sendGoalMessage(teamID) {
         var i = Math.floor((Math.random() * LISTA_MENSAGENS_DE_GOL.length));
         var mensagem = (teamID == 1) ? "[🔴] " : "[🔵] ";
-        try 
-        {
+        try {
             mensagem += LISTA_MENSAGENS_DE_GOL[i];
         } catch (error) {
             mensagem += MENSAGEM_DEFAULT;
@@ -770,13 +693,11 @@ class ChatController
         room.sendAnnouncement(mensagem, null, 0xFF0000, null, 1);
     }
 
-    handlePlayerBallKick()
-    {
+    handlePlayerBallKick() {
         this.validLunchBreak();
     }
 
-    handleTeamGoal(teamID)
-    {
+    handleTeamGoal(teamID) {
         this.sendGoalMessage(teamID);
     }
 }
@@ -797,10 +718,8 @@ const chatController = new ChatController(commandController);
 
 // Eventos da sala
 let CONN_ID;
-room.onPlayerJoin = function (player) 
-{
-    if (HOSTING_ON_MATRIX)
-    {
+room.onPlayerJoin = function(player) {
+    if (HOSTING_ON_MATRIX) {
         if (player.id == 1)
             CONN_ID = player.conn;
 
@@ -808,30 +727,26 @@ room.onPlayerJoin = function (player)
             room.setPlayerAdmin(player.id, true);
     }
 
-    room.sendAnnouncement("["+BOT_NAME+"] 👋 Bem vindo(a), " + player.name + "!", null, PRIMARY_COLOR_DEFAULT, "bold", 1);
+    room.sendAnnouncement("[" + BOT_NAME + "] 👋 Bem vindo(a), " + player.name + "!", null, PRIMARY_COLOR_DEFAULT, "bold", 1);
 
     playerController.newPlayer(player);
 }
 
-room.onGameTick = function ()
-{
+room.onGameTick = function() {
     matchController.handleGameTick();
 }
 
-room.onPlayerBallKick = function (player) 
-{
+room.onPlayerBallKick = function(player) {
     chatController.handlePlayerBallKick();
 }
 
-room.onGameStart = function(byPlayer)
-{
+room.onGameStart = function(byPlayer) {
     // Dados ficam guardados até o início da próxima partida
     matchController.handleGameStart();
     teamsController.handleGameStart();
 }
 
-room.onTeamVictory = function(scores)
-{
+room.onTeamVictory = function(scores) {
     teamsController.handleTeamVictory(scores);
     matchController.handleTeamVictory(scores);
     statsController.handleTeamVictory(scores);
@@ -844,30 +759,25 @@ room.onTeamGoal = function(teamID) {
 
     // Mensagem troll de gol
     chatController.handleTeamGoal(teamID);
-    
+
     let striker = matchController.playersThatTouchedTheBall.pop();
     striker = (striker) ? room.getPlayer(striker) : null;
     if (!striker)
         return;
 
     let assistant = matchController.playersThatTouchedTheBall.pop();
-    assistant = (assistant) ? room.getPlayer(assistant): null;
+    assistant = (assistant) ? room.getPlayer(assistant) : null;
 
     let golContra = false;
 
     // Caso o gol seja contra
-    if (teamID !== striker.team) 
-    {
-        if (assistant != null && teamID === assistant.team)
-        {
+    if (teamID !== striker.team) {
+        if (assistant != null && teamID === assistant.team) {
             striker = assistant;
-            assistant = null; 
-        }
-        else
+            assistant = null;
+        } else
             golContra = true;
-    }
-    else
-    {
+    } else {
         // Caso o gol seja valido e a assistência tenha vindo do outro time,
         // não há assistência então.
         if (assistant != null && teamID !== assistant.team)
@@ -877,11 +787,10 @@ room.onTeamGoal = function(teamID) {
     teamsController.handleTeamGoal(teamID);
     matchController.handleTeamGoal(teamID, striker, assistant, golContra);
     statsController.handleTeamGoal(striker, assistant);
-    
+
 }
 
-room.onPlayerChat = function(player, message)
-{
+room.onPlayerChat = function(player, message) {
     // Outros códigos podem ser feitos aqui ainda
 
     // Caso retorne false no TrataComando trata-se de n ser um comando personalizado
@@ -890,8 +799,7 @@ room.onPlayerChat = function(player, message)
 
 
 // Utils
-function getMatchTimeString()
-{
+function getMatchTimeString() {
     var time = room.getScores().time;
     var mins = ~~((time % 3600) / 60);
     var secs = ~~time % 60;
@@ -901,29 +809,26 @@ function getMatchTimeString()
     return ret;
 }
 
-function getRandomColorInt()
-{
-    return '0x'+(Math.random()*0xFFFFFF<<0).toString(16);
+function getRandomColorInt() {
+    return '0x' + (Math.random() * 0xFFFFFF << 0).toString(16);
 }
 
-function getRandomColorString()
-{
-    return '#'+(Math.random()*0xFFFFFF<<0).toString(16);
+function getRandomColorString() {
+    return '#' + (Math.random() * 0xFFFFFF << 0).toString(16);
 }
 
-function pointDistance(p1, p2) 
-{
-	var d1 = p1.x - p2.x;
-	var d2 = p1.y - p2.y;
-	return Math.sqrt(d1 * d1 + d2 * d2);
+function pointDistance(p1, p2) {
+    var d1 = p1.x - p2.x;
+    var d2 = p1.y - p2.y;
+    return Math.sqrt(d1 * d1 + d2 * d2);
 }
 
-function downloadObjectAsJson(exportObj, exportName){
+function downloadObjectAsJson(exportObj, exportName) {
     var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
     var downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("href", dataStr);
     downloadAnchorNode.setAttribute("download", exportName + ".json");
     document.body.appendChild(downloadAnchorNode); // required for firefox
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
-  }
+}
