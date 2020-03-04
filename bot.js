@@ -559,15 +559,14 @@ class Command {
         return new Command(hasToBeAdmin, method, Array.prototype.slice.call(arguments, 2));
     }
 
-    execute(player /**/ ) // : bool
-        {
-            if (this.hasToBeAdmin && !player.admin) {
-                return false;
-            }
-
-            let args = Array.from(arguments).concat(this.services);
-            return this.method(...args);
+    execute(player /**/ ) {
+        if (this.hasToBeAdmin && !player.admin) {
+            return false;
         }
+
+        let args = Array.from(arguments).concat(this.services);
+        return this.method(...args);
+    }
 }
 
 class CommandController {
