@@ -467,7 +467,7 @@ class StatsController {
     }
 
     handleTeamVictory(scores) {
-        let players_playing = room.getPlayerList().filter((player) => player.team != 0);
+        let players_playing = room.getPlayerList().filter((player) => player.team !== 0);
         let teamWonId = (scores.red > scores.blue) ? 1 : 2;
 
         if (SHOW_STATS_ON_VICTORY) {
@@ -476,7 +476,7 @@ class StatsController {
 
         players_playing.forEach((player) => {
             let playerStats = this.getPlayer(player.id).stats;
-            if (player.team == teamWonId) {
+            if (player.team === teamWonId) {
                 playerStats.wins++;
                 playerStats.winStreakAtual++;
 
@@ -509,15 +509,13 @@ class StatsController {
         }
 
         // Caso o assistente seja diferente do striker adiciona a assistência
-        if (assistant != null && assistant.id != striker.id) {
+        if (assistant !== null && assistant.id !== striker.id) {
             let assistantStats = this.getPlayer(assistant.id).stats;
             if (assistantStats) {
                 assistantStats.assists += 1;
             }
         }
-
     }
-
 }
 
 class PlayerController {
@@ -600,7 +598,7 @@ class CommandController {
         let Command = this.commands[sCommand];
 
         // Log chamada de comando
-        console.log("Player: " + player.name + " - Comando: " + sCommand + " " + args + " - Admin?: " + player.admin + " - Existe?: " + (Command != null && typeof(Command) != "undefined"));
+        console.log("Player: " + player.name + " - Comando: " + sCommand + " " + args + " - Admin?: " + player.admin + " - Existe?: " + (Command !== null && typeof(Command) !== "undefined"));
 
         // Comando pode não ter sido encontrado, porém ele ainda é considerado uma tentativa.
         // Logo não será mostrado no chat
@@ -778,11 +776,11 @@ const chatController = new ChatController(commandController);
 let CONN_ID;
 room.onPlayerJoin = function(player) {
     if (HOSTING_ON_MATRIX) {
-        if (player.id == 1) {
+        if (player.id === 1) {
             CONN_ID = player.conn;
         }
 
-        if (player.conn == CONN_ID) {
+        if (player.conn === CONN_ID) {
             room.setPlayerAdmin(player.id, true);
         }
     }
@@ -834,7 +832,7 @@ room.onTeamGoal = function(teamID) {
 
     // Caso o gol seja contra
     if (teamID !== striker.team) {
-        if (assistant != null && teamID === assistant.team) {
+        if (assistant !== null && teamID === assistant.team) {
             striker = assistant;
             assistant = null;
         } else {
@@ -843,7 +841,7 @@ room.onTeamGoal = function(teamID) {
     } else {
         // Caso o gol seja valido e a assistência tenha vindo do outro time,
         // não há assistência então.
-        if (assistant != null && teamID !== assistant.team) {
+        if (assistant !== null && teamID !== assistant.team) {
             assistant = null;
         }
     }
