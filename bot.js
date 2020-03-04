@@ -66,8 +66,6 @@ room.setTeamColors(...BLUE_TEAM_COLORS_DEFAULT);
 
 // Utils
 class Utils {
-    constructor() {}
-
     static getMatchTimeString() {
         let time = room.getScores().time;
         let mins = ~~((time % 3600) / 60);
@@ -102,8 +100,6 @@ class Utils {
         downloadAnchorNode.remove();
     }
 }
-
-const Utils = new Utils();
 
 // Modelos
 class MatchStats {
