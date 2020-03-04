@@ -17,4 +17,3 @@ browser's console
 4.  Click on Room Link.
 
 5.  Be happy!
-
