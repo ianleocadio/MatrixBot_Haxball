@@ -203,7 +203,7 @@ class TeamsController {
     handleGameStart() {
         // Red team
         let red_players_playing_auths = room.getPlayerList()
-            .filter((p) => p.team == 1)
+            .filter((p) => p.team === 1)
             .map((p) => {
                 let player = this.statsController.getPlayer(p.id);
                 if (player)
@@ -215,7 +215,7 @@ class TeamsController {
 
         // Blue team
         let blue_players_playing_auths = room.getPlayerList()
-            .filter((p) => p.team == 2)
+            .filter((p) => p.team === 2)
             .map((p) => {
                 let player = this.statsController.getPlayer(p.id);
                 if (player)
@@ -346,7 +346,7 @@ class MatchController {
     handleTeamVictory(scores) {
         let teamWonID = (scores.red > scores.blue) ? 1 : 2;
         this.calculatePossession();
-        room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID == 1 ? "🔴" : "🔵") + " (" + scores.red + "x" + scores.blue + ")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
+        room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID === 1 ? "🔴" : "🔵") + " (" + scores.red + "x" + scores.blue + ")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
         this.printPossession();
         this.printStrikers();
     }
@@ -724,7 +724,7 @@ class ChatController {
         let flag = false;
         let d = new Date();
         let n = d.getHours();
-        if (n == 14) {
+        if (n === 14) {
             n = d.getMinutes();
             if (n >= 0) {
                 if (!flag) {
