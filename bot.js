@@ -64,6 +64,47 @@ room.setTeamsLock(TEAMS_LOCK_DEFAULT);
 room.setTeamColors(...RED_TEAM_COLORS_DEFAULT);
 room.setTeamColors(...BLUE_TEAM_COLORS_DEFAULT);
 
+// Utils
+class Utils {
+    constructor() {}
+
+    static getMatchTimeString() {
+        let time = room.getScores().time;
+        let mins = ~~((time % 3600) / 60);
+        let secs = ~~time % 60;
+
+        let ret = (mins < 10 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "");
+        ret += "" + secs;
+        return ret;
+    }
+
+    static getRandomColorInt() {
+        return '0x' + (Math.random() * 0xFFFFFF << 0).toString(16);
+    }
+
+    static getRandomColorString() {
+        return '#' + (Math.random() * 0xFFFFFF << 0).toString(16);
+    }
+
+    static pointDistance(p1, p2) {
+        let d1 = p1.x - p2.x;
+        let d2 = p1.y - p2.y;
+        return Math.sqrt(d1 * d1 + d2 * d2);
+    }
+
+    static downloadObjectAsJson(exportObj, exportName) {
+        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+        let downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", exportName + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+}
+
+const Utils = new Utils();
+
 // Modelos
 class MatchStats {
     constructor() {
@@ -127,16 +168,19 @@ class TeamsController {
     // Métodos
 
     tryGetOrAddTeam(playersPlayingAuths) {
-        if (!playersPlayingAuths || typeof(playersPlayingAuths) !== "array" || playersPlayingAuths.length <= 0)
+        if (!playersPlayingAuths || typeof(playersPlayingAuths) !== "array" || playersPlayingAuths.length <= 0) {
             return null;
+        }
 
         let key = playersPlayingAuths.reduce((keyAcum, auth) => (keyAcum + auth), "");
 
-        if (key === "")
+        if (key === "") {
             return null;
+        }
 
-        if (this.teams.has(key))
+        if (this.teams.has(key)) {
             return this.teams.get(key);
+        }
 
         return this.teams.set(key, new TeamStats(key));
     }
@@ -146,7 +190,7 @@ class TeamsController {
             .filter(p => p.team == teamID)
             .map(p => this.statsController.getPlayer(p.id).auth);
 
-        var teamStats = this.teams.get(auths);
+        let teamStats = this.teams.get(auths);
 
         if (!teamStats)
             return null;
@@ -191,7 +235,7 @@ class TeamsController {
     }
 
     handleTeamVictory(scores) {
-        var teamWonID = scores.red > scores.blue ? 1 : 2;
+        let teamWonID = scores.red > scores.blue ? 1 : 2;
 
         let teamWonStats = this.tryGetCurrentTeam(teamWonID);
 
@@ -199,8 +243,9 @@ class TeamsController {
             teamWonStats.wins++;
             teamWonStats.winStreakAtual++;
 
-            if (teamWonStats.winStreakAtual > teamWonStats.winStreak)
+            if (teamWonStats.winStreakAtual > teamWonStats.winStreak) {
                 teamWonStats.winStreak = teamWonStats.winStreakAtual;
+            }
         }
 
         let teamLostStats = this.tryGetCurrentTeam(teamWonID == 1 ? 2 : 1);
@@ -231,7 +276,7 @@ class MatchController {
 
     printStrikers() {
         room.sendAnnouncement("Artilheiros da partida:", null, SECONDARY_COLOR_DEFAULT, "bold", 0);
-        var text = "";
+        let text = "";
         this.currentMatchStats.strikers.forEach((value, key) => {
             if (!value.golContra) {
                 text += "(" + (value.team === 1 ? "🔴" : "🔵") + "[" + key + "] " + value.striker.name + (value.assistant !== null ? " (Assist: " + value.assistant.name + ") ) " : " ) ");
@@ -255,19 +300,19 @@ class MatchController {
     }
 
     handleGameTick() {
-        var players_playing = room.getPlayerList().filter(p => p.team != 0);
-        var ballPosition = room.getBallPosition();
+        let players_playing = room.getPlayerList().filter(p => p.team !== 0);
+        let ballPosition = room.getBallPosition();
         const ballRadius = 6.4;
         const playerRadius = 15;
-        var triggerDistance = ballRadius + playerRadius + 0.01;
+        let triggerDistance = ballRadius + playerRadius + 0.01;
 
         players_playing.forEach((player) => {
 
-            var distanceToBall = pointDistance(player.position, ballPosition);
+            let distanceToBall = Utils.pointDistance(player.position, ballPosition);
             if (distanceToBall < triggerDistance) {
 
-                var p = this.playersThatTouchedTheBall.find((p) => p === player.id);
-                var index = this.playersThatTouchedTheBall.indexOf(p);
+                let p = this.playersThatTouchedTheBall.find((p) => p === player.id);
+                let index = this.playersThatTouchedTheBall.indexOf(p);
                 if (index <= -1) {
                     this.playersThatTouchedTheBall.push(player.id);
                 } else {
@@ -280,26 +325,26 @@ class MatchController {
         });
     }
 
-
     // Eventos
     handleGameStart() {
         this.restartMatchStats();
     }
 
     handleTeamGoal(teamID, striker, assistant, golContra) {
-        if (striker == null)
+        if (striker == null) {
             return;
+        }
 
-        this.currentMatchStats.strikers.set(getMatchTimeString(), {
-            "striker": striker,
-            "assistant": (assistant != null && assistant.id != striker.id) ? assistant : null,
+        this.currentMatchStats.strikers.set(Utils.getMatchTimeString(), {
+            striker,
+            "assistant": (assistant !== null && assistant.id !== striker.id) ? assistant : null,
             "team": teamID,
-            "golContra": golContra
+            golContra
         });
     }
 
     handleTeamVictory(scores) {
-        var teamWonID = (scores.red > scores.blue) ? 1 : 2;
+        let teamWonID = (scores.red > scores.blue) ? 1 : 2;
         this.calculatePossession();
         room.sendAnnouncement(("🏆 Vitória do time " + (teamWonID == 1 ? "🔴" : "🔵") + " (" + scores.red + "x" + scores.blue + ")"), null, PRIMARY_COLOR_DEFAULT, "bold", 0);
         this.printPossession();
@@ -322,10 +367,10 @@ class StatsController {
 
     printPlayerStat(id, sendToAll = false) {
 
-        var player = this.getPlayer(id);
+        let player = this.getPlayer(id);
 
-        var rate = parseInt(player.stats.rate);
-        var text = "[" + player.name + "]" +
+        let rate = parseInt(player.stats.rate);
+        let text = "[" + player.name + "]" +
             " 🏆 Vitórias: " + player.stats.wins +
             ", 💩 Derrotas: " + player.stats.losses +
             ", 📊 Aproveitamento: " + (isNaN(rate) ? 0 : rate) + "%" +
@@ -351,12 +396,13 @@ class StatsController {
         // Players IDs
         Object.values(this.getPlayers())
             .sort((p1, p2) => {
-                if (p1.stats.score < p2.stats.score)
+                if (p1.stats.score < p2.stats.score) {
                     return 1;
-                else if (p1.stats.score > p2.stats.score)
+                } else if (p1.stats.score > p2.stats.score) {
                     return -1;
-                else
+                } else {
                     return 0;
+                }
             })
             .forEach((player, i) => {
                 room.sendAnnouncement((i + 1) + "º) " + player.name + " - ⚽ Gols: " + player.stats.score, null, 0xFFFF00, null, 0);
@@ -368,12 +414,13 @@ class StatsController {
         // Players IDs
         Object.values(this.getPlayers())
             .sort((p1, p2) => {
-                if (p1.stats.wins < p2.stats.wins)
+                if (p1.stats.wins < p2.stats.wins) {
                     return 1;
-                else if (p1.stats.wins > p2.stats.wins)
+                } else if (p1.stats.wins > p2.stats.wins) {
                     return -1;
-                else
+                } else {
                     return 0;
+                }
             })
             .forEach((player, i) => {
                 room.sendAnnouncement((i + 1) + "º) " + player.name + " - 🏆 Vitórias: " + player.stats.wins, null, 0xFFFF00, null, 0);
@@ -385,12 +432,13 @@ class StatsController {
         // Players IDs
         Object.values(this.getPlayers())
             .sort((p1, p2) => {
-                if (p1.stats.winStreak < p2.stats.winStreak)
+                if (p1.stats.winStreak < p2.stats.winStreak) {
                     return 1;
-                else if (p1.stats.winStreak > p2.stats.winStreak)
+                } else if (p1.stats.winStreak > p2.stats.winStreak) {
                     return -1;
-                else
+                } else {
                     return 0;
+                }
             })
             .forEach((player, i) => {
                 room.sendAnnouncement((i + 1) + "º) " + player.name + " - 🏆 Vitórias em sequência: " + player.stats.winStreak, null, 0xFFFF00, null, 0);
@@ -399,38 +447,42 @@ class StatsController {
 
     notifyLongWinStreak(playerID) {
 
-        var player = this.getPlayer(playerID);
+        let player = this.getPlayer(playerID);
 
-        if (!player || player.stats.winStreakAtual < 5)
+        if (!player || player.stats.winStreakAtual < 5) {
             return;
+        }
 
-        var text;
+        let text;
 
-        if (player.stats.losses === 0)
+        if (player.stats.losses === 0) {
             text = "[" + player.name + "] está INVICTO em uma sequência de " +
-            player.stats.winStreakAtual + " vitórias 🏆";
-        else
+                player.stats.winStreakAtual + " vitórias 🏆";
+        } else {
             text = "[" + player.name + "] está em uma sequência de " +
-            player.stats.winStreakAtual + " vitórias 🏆";
+                player.stats.winStreakAtual + " vitórias 🏆";
+        }
 
         room.sendAnnouncement(text, null, TERNARY_COLOR_DEFAULT, "bold", 1);
     }
 
     handleTeamVictory(scores) {
-        var players_playing = room.getPlayerList().filter((player) => player.team != 0);
-        var teamWonId = (scores.red > scores.blue) ? 1 : 2;
+        let players_playing = room.getPlayerList().filter((player) => player.team != 0);
+        let teamWonId = (scores.red > scores.blue) ? 1 : 2;
 
-        if (SHOW_STATS_ON_VICTORY)
+        if (SHOW_STATS_ON_VICTORY) {
             room.sendAnnouncement(">>>>>>>> Status dos jogadores da partida <<<<<<<<", null, PRIMARY_COLOR_DEFAULT, "bold", 0);
+        }
 
         players_playing.forEach((player) => {
-            var playerStats = this.getPlayer(player.id).stats;
+            let playerStats = this.getPlayer(player.id).stats;
             if (player.team == teamWonId) {
                 playerStats.wins++;
                 playerStats.winStreakAtual++;
 
-                if (playerStats.winStreakAtual > playerStats.winstreak)
+                if (playerStats.winStreakAtual > playerStats.winstreak) {
                     playerStats.winstreak = playerStats.winStreakAtual;
+                }
             } else {
                 playerStats.losses++;
                 playerStats.winStreakAtual = 0;
@@ -439,8 +491,9 @@ class StatsController {
             playerStats.rate = 100 * (playerStats.wins /
                 (playerStats.wins + playerStats.losses));
 
-            if (SHOW_STATS_ON_VICTORY)
+            if (SHOW_STATS_ON_VICTORY) {
                 this.printPlayerStat(player.id, true);
+            }
         });
 
         players_playing.forEach((player) => this.notifyLongWinStreak(player.id));
@@ -448,7 +501,7 @@ class StatsController {
 
     handleTeamGoal(striker, assistant) {
 
-        var strikerStats = this.getPlayer(striker.id).stats;
+        let strikerStats = this.getPlayer(striker.id).stats;
 
         // Caso o striker exista na lista de stats, adiciona o score
         if (strikerStats) {
@@ -457,7 +510,7 @@ class StatsController {
 
         // Caso o assistente seja diferente do striker adiciona a assistência
         if (assistant != null && assistant.id != striker.id) {
-            var assistantStats = this.getPlayer(assistant.id).stats;
+            let assistantStats = this.getPlayer(assistant.id).stats;
             if (assistantStats) {
                 assistantStats.assists += 1;
             }
@@ -476,7 +529,7 @@ class PlayerController {
 
     newPlayer(player) {
         if (this.AuthToId.hasOwnProperty(player.auth)) {
-            var oldID = this.AuthToId[player.auth];
+            let oldID = this.AuthToId[player.auth];
             // Renovando chave
             this.players[player.id] = this.players[oldID];
             this.players[player.id].auth = player.auth;
@@ -510,10 +563,11 @@ class Command {
 
     execute(player /**/ ) // : bool
         {
-            if (this.hasToBeAdmin && !player.admin)
+            if (this.hasToBeAdmin && !player.admin) {
                 return false;
+            }
 
-            var args = Array.from(arguments).concat(this.services);
+            let args = Array.from(arguments).concat(this.services);
             return this.method(...args);
         }
 }
@@ -543,20 +597,22 @@ class CommandController {
     }
 
     execute(player, sCommand, args) {
-        var Command = this.commands[sCommand];
+        let Command = this.commands[sCommand];
 
         // Log chamada de comando
         console.log("Player: " + player.name + " - Comando: " + sCommand + " " + args + " - Admin?: " + player.admin + " - Existe?: " + (Command != null && typeof(Command) != "undefined"));
 
         // Comando pode não ter sido encontrado, porém ele ainda é considerado uma tentativa.
         // Logo não será mostrado no chat
-        if (!Command)
+        if (!Command) {
             return true;
+        }
 
-        var result = Command.execute(player, ...args);
+        let result = Command.execute(player, ...args);
 
-        if (result && typeof(result) == 'boolean')
+        if (result && typeof(result) == 'boolean') {
             return result;
+        }
 
         return true;
     }
@@ -565,10 +621,11 @@ class CommandController {
     // Retorna se é ou não um comando (true or false)
     tryCommand(player, message) {
 
-        if (!message.startsWith("!"))
+        if (!message.startsWith("!")) {
             return false;
+        }
 
-        var command = message.split(" ");
+        let command = message.split(" ");
 
         try {
             return this.execute(player, command.shift(), command);
@@ -588,7 +645,7 @@ class CommandController {
         console.log("[" + player.name + "] - Info");
         console.dir(statsControllerInjection.getPlayers());
         console.log("============================");
-        downloadObjectAsJson(statsControllerInjection.getPlayers(), "Stats");
+        Utils.downloadObjectAsJson(statsControllerInjection.getPlayers(), "Stats");
     }
 
     printStat(player, statsControllerInjection) {
@@ -657,22 +714,23 @@ class ChatController {
 
     chatTreatment(player, message) {
         // Se for um comando retorna false para que não seja mostrado no chat
-        if (this.commandController.tryCommand(player, message))
+        if (this.commandController.tryCommand(player, message)) {
             return false;
+        }
 
         // Abre novas possibilidades de tratamento aqui
         return true;
     }
 
     validLunchBreak() {
-        var flag = false;
-        var d = new Date();
-        var n = d.getHours();
+        let flag = false;
+        let d = new Date();
+        let n = d.getHours();
         if (n == 14) {
             n = d.getMinutes();
             if (n >= 0) {
                 if (!flag) {
-                    downloadObjectAsJson(statsController.getPlayers(), "PlayersStats_14_00");
+                    Utils.downloadObjectAsJson(statsController.getPlayers(), "PlayersStats_14_00");
                     flag = true;
                 }
 
@@ -682,8 +740,8 @@ class ChatController {
     }
 
     sendGoalMessage(teamID) {
-        var i = Math.floor((Math.random() * LISTA_MENSAGENS_DE_GOL.length));
-        var mensagem = (teamID == 1) ? "[🔴] " : "[🔵] ";
+        let i = Math.floor((Math.random() * LISTA_MENSAGENS_DE_GOL.length));
+        let mensagem = (teamID == 1) ? "[🔴] " : "[🔵] ";
         try {
             mensagem += LISTA_MENSAGENS_DE_GOL[i];
         } catch (error) {
@@ -720,11 +778,13 @@ const chatController = new ChatController(commandController);
 let CONN_ID;
 room.onPlayerJoin = function(player) {
     if (HOSTING_ON_MATRIX) {
-        if (player.id == 1)
+        if (player.id == 1) {
             CONN_ID = player.conn;
+        }
 
-        if (player.conn == CONN_ID)
+        if (player.conn == CONN_ID) {
             room.setPlayerAdmin(player.id, true);
+        }
     }
 
     room.sendAnnouncement("[" + BOT_NAME + "] 👋 Bem vindo(a), " + player.name + "!", null, PRIMARY_COLOR_DEFAULT, "bold", 1);
@@ -754,16 +814,18 @@ room.onTeamVictory = function(scores) {
 
 room.onTeamGoal = function(teamID) {
 
-    if (matchController.playersThatTouchedTheBall.size <= 0)
+    if (matchController.playersThatTouchedTheBall.size <= 0) {
         return;
+    }
 
     // Mensagem troll de gol
     chatController.handleTeamGoal(teamID);
 
     let striker = matchController.playersThatTouchedTheBall.pop();
     striker = (striker) ? room.getPlayer(striker) : null;
-    if (!striker)
+    if (!striker) {
         return;
+    }
 
     let assistant = matchController.playersThatTouchedTheBall.pop();
     assistant = (assistant) ? room.getPlayer(assistant) : null;
@@ -775,13 +837,15 @@ room.onTeamGoal = function(teamID) {
         if (assistant != null && teamID === assistant.team) {
             striker = assistant;
             assistant = null;
-        } else
+        } else {
             golContra = true;
+        }
     } else {
         // Caso o gol seja valido e a assistência tenha vindo do outro time,
         // não há assistência então.
-        if (assistant != null && teamID !== assistant.team)
+        if (assistant != null && teamID !== assistant.team) {
             assistant = null;
+        }
     }
 
     teamsController.handleTeamGoal(teamID);
@@ -795,40 +859,4 @@ room.onPlayerChat = function(player, message) {
 
     // Caso retorne false no TrataComando trata-se de n ser um comando personalizado
     return chatController.chatTreatment(player, message);
-}
-
-
-// Utils
-function getMatchTimeString() {
-    var time = room.getScores().time;
-    var mins = ~~((time % 3600) / 60);
-    var secs = ~~time % 60;
-
-    var ret = (mins < 10 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "");
-    ret += "" + secs;
-    return ret;
-}
-
-function getRandomColorInt() {
-    return '0x' + (Math.random() * 0xFFFFFF << 0).toString(16);
-}
-
-function getRandomColorString() {
-    return '#' + (Math.random() * 0xFFFFFF << 0).toString(16);
-}
-
-function pointDistance(p1, p2) {
-    var d1 = p1.x - p2.x;
-    var d2 = p1.y - p2.y;
-    return Math.sqrt(d1 * d1 + d2 * d2);
-}
-
-function downloadObjectAsJson(exportObj, exportName) {
-    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
-    var downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", exportName + ".json");
-    document.body.appendChild(downloadAnchorNode); // required for firefox
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
 }
